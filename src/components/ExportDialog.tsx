@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { downloadText } from '../download'
 import { buildIcs, exportableTasks, icsFilename } from '../exportIcs'
 import { fromDayNum } from '../ical/dates'
 import { GROUP_LABEL, type Group, type Settings } from '../settings'
@@ -19,15 +20,6 @@ interface Props {
   weekStart: number
   settings: Settings
   onSettings: (s: Settings) => void
-}
-
-function download(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/calendar;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 interface CardProps {
@@ -53,7 +45,7 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
       reminderMins: settings.reminderMins,
       busy: settings.busy,
     })
-    download(icsFilename(group, weekStart), ics)
+    downloadText(icsFilename(group, weekStart), ics, 'text/calendar;charset=utf-8')
   }
 
   return (

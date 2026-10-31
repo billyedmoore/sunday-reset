@@ -33,21 +33,25 @@ export const GROUP_LABEL: Record<Group, string> = { daily: 'Day to day', weekly:
 const KEY = 'sunday-reset:settings:v1'
 const HEX = /^#[0-9a-f]{6}$/i
 
+/** Turn whatever was stored into valid settings, filling any gaps with defaults. */
+function normalizeSettings(raw: unknown): Settings {
+  const saved = (raw && typeof raw === 'object' ? raw : {}) as Partial<Settings>
+  const group = (g: Group): GroupSettings => ({
+    name: typeof saved[g]?.name === 'string' && saved[g]!.name.trim() ? saved[g]!.name.trim() : DEFAULT_SETTINGS[g].name,
+    color: typeof saved[g]?.color === 'string' && HEX.test(saved[g]!.color) ? saved[g]!.color : DEFAULT_SETTINGS[g].color,
+  })
+  return {
+    daily: group('daily'),
+    weekly: group('weekly'),
+    reminderMins: typeof saved.reminderMins === 'number' ? saved.reminderMins : DEFAULT_SETTINGS.reminderMins,
+    busy: typeof saved.busy === 'boolean' ? saved.busy : DEFAULT_SETTINGS.busy,
+  }
+}
+
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY)
-    if (!raw) return DEFAULT_SETTINGS
-    const saved = JSON.parse(raw) as Partial<Settings>
-    const group = (g: Group): GroupSettings => ({
-      name: saved[g]?.name?.trim() || DEFAULT_SETTINGS[g].name,
-      color: saved[g]?.color && HEX.test(saved[g]!.color) ? saved[g]!.color : DEFAULT_SETTINGS[g].color,
-    })
-    return {
-      daily: group('daily'),
-      weekly: group('weekly'),
-      reminderMins: typeof saved.reminderMins === 'number' ? saved.reminderMins : DEFAULT_SETTINGS.reminderMins,
-      busy: typeof saved.busy === 'boolean' ? saved.busy : DEFAULT_SETTINGS.busy,
-    }
+    return raw ? normalizeSettings(JSON.parse(raw)) : DEFAULT_SETTINGS
   } catch {
     return DEFAULT_SETTINGS
   }

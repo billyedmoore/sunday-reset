@@ -209,6 +209,37 @@ describe('placementsOf', () => {
   })
 })
 
+describe('shuffling keeps what the user moved', () => {
+  it('clearSlots only forgets tasks the user did not place themselves', () => {
+    const mine: Task = { ...task('mine', 60, null), slot: { day: 1, startMin: 600, manual: true } }
+    const auto: Task = { ...task('auto', 60, null), slot: { day: 2, startMin: 600 } }
+    const cleared = clearSlots([mine, auto])
+    expect(cleared[0].slot).toEqual({ day: 1, startMin: 600, manual: true })
+    expect(cleared[1].slot).toBeUndefined()
+  })
+
+  it('a re-roll leaves manual tasks in place and keeps them manual', () => {
+    const mine: Task = { ...task('mine', 60, null), slot: { day: 1, startMin: 600, manual: true } }
+    const others = Array.from({ length: 5 }, (_, i) => task(`t${i}`, 60, null))
+    for (let seed = 0; seed < 20; seed++) {
+      const out = autoPlace(clearSlots([mine, ...others]), { busy: empty(), seed })
+      expect(out[0].slot).toEqual({ day: 1, startMin: 600, manual: true })
+      for (const t of out.slice(1)) {
+        if (t.slot!.day === 1) expect(t.slot!.startMin + 60 + 15 <= 600 || t.slot!.startMin >= 660 + 15).toBe(true)
+      }
+    }
+  })
+
+  it('a manual slot that no longer fits is re-placed and is no longer manual', () => {
+    const busy = empty()
+    busy[1] = [{ start: 9 * 60, end: 12 * 60 }]
+    const stale: Task = { ...task('a', 60, null), slot: { day: 1, startMin: 10 * 60, manual: true } }
+    const [moved] = autoPlace([stale], { busy, seed: 3 })
+    expect(moved.slot).toBeDefined()
+    expect(moved.slot!.manual).toBeUndefined()
+  })
+})
+
 describe('busyByDay', () => {
   const ics = [
     'BEGIN:VCALENDAR',

@@ -13,6 +13,7 @@ import {
   loadTasks,
   moveTask,
   removeTask,
+  restoreTask,
   saveTasks,
   setTaskMins,
   type Task,
@@ -33,6 +34,17 @@ const scheduleOpts = (events: StoredEvent[], week: number, today: number): Sched
 /** Place any waiting tasks for a week and re-check the existing slots against the events. */
 function placeWeek(all: TasksByWeek, week: number, opts: ScheduleOptions): TasksByWeek {
   return all[week]?.length ? { ...all, [week]: autoPlace(all[week], opts) } : all
+}
+
+/** Run `clear` after `ms` whenever `value` is set; used for messages that fade on their own. */
+function useExpiry(value: unknown, clear: () => void, ms: number) {
+  useEffect(() => {
+    if (!value) return
+    const t = setTimeout(clear, ms)
+    return () => clearTimeout(t)
+    // `clear` only calls a state setter, which is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, ms])
 }
 
 export default function App() {
@@ -74,12 +86,38 @@ export default function App() {
   const placements = useMemo(() => placementsOf(tasks), [tasks])
   const unplaced = useMemo(() => tasks.filter((t) => !t.slot), [tasks])
 
+  // The last deletion, so it can be undone for a few seconds.
+  const [undo, setUndo] = useState<{ task: Task; index: number; week: number } | null>(null)
+  useExpiry(undo, () => setUndo(null), 9000)
+
+  function onRemove(id: string) {
+    const index = tasks.findIndex((t) => t.id === id)
+    if (index < 0) return
+    setUndo({ task: tasks[index], index, week: weekStart })
+    editTasks((t) => removeTask(t, id))
+  }
+
+  function onUndo() {
+    if (!undo) return
+    const { task, index, week } = undo
+    const opts = scheduleOpts(events, week, today)
+    setTasksByWeek((all) => ({ ...all, [week]: autoPlace(restoreTask(all[week] ?? [], task, index), opts) }))
+    setUndo(null)
+  }
+
   async function handleFile(file: File | undefined) {
     if (!file) return
     setError('')
     setBusy(true)
     try {
       const imported = await importCalendarFile(file)
+      if (events.length) {
+        const calendars = new Set(events.map((e) => e.calendar)).size
+        const ok = window.confirm(
+          `Replace the ${events.length} events from ${calendars} calendar${calendars === 1 ? '' : 's'} you imported before with the ${imported.length} events in "${file.name}"?`,
+        )
+        if (!ok) return
+      }
       setEvents(imported)
       const opts = scheduleOpts(imported, weekStart, today)
       setTasksByWeek((all) => placeWeek(all, weekStart, opts))
@@ -112,7 +150,7 @@ export default function App() {
             const opts = placeOpts()
             editTasks((t) => autoPlace(addTask(t, { title, mins, day }), opts))
           }}
-          onRemove={(id) => editTasks((t) => removeTask(t, id))}
+          onRemove={onRemove}
           onSetMins={(id, mins) => {
             const opts = placeOpts()
             editTasks((t) => autoPlace(setTaskMins(t, id, mins), opts))
@@ -177,6 +215,17 @@ export default function App() {
         settings={settings}
         onSettings={setSettings}
       />
+      {undo && (
+        <div className="toast" role="status">
+          <span>Deleted “{undo.task.title}”.</span>
+          <button className="btn small" onClick={onUndo}>
+            Undo
+          </button>
+          <button className="x" aria-label="Dismiss" onClick={() => setUndo(null)}>
+            ×
+          </button>
+        </div>
+      )}
     </div>
   )
 }

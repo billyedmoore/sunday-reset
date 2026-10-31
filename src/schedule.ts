@@ -198,7 +198,13 @@ export function autoPlace(tasks: Task[], opts: ScheduleOptions): Task[] {
       { day: p.day, startMin: p.startMin, ...(p.forced ? { forced: true } : {}) },
     ]),
   )
-  return tasks.map((t) => ({ ...t, slot: slots.get(t.id) }))
+  return tasks.map((t) => {
+    const slot = slots.get(t.id)
+    if (!slot) return { ...t, slot: undefined }
+    // A task the user moved stays "manual" for as long as it keeps that spot.
+    const keepsManual = t.slot?.manual && t.slot.day === slot.day && t.slot.startMin === slot.startMin
+    return { ...t, slot: keepsManual ? { ...slot, manual: true } : slot }
+  })
 }
 
 /** The tasks that currently have a place on the calendar, with their forced flag carried across. */
@@ -207,5 +213,9 @@ export const placementsOf = (tasks: Task[]): Placement[] =>
     t.slot ? [{ task: t, day: t.slot.day, startMin: t.slot.startMin, ...(t.slot.forced ? { forced: true } : {}) }] : [],
   )
 
-/** Forget every slot, so the next `autoPlace` re-rolls the whole week. */
-export const clearSlots = (tasks: Task[]): Task[] => tasks.map((t) => ({ ...t, slot: undefined }))
+/**
+ * Forget the slots of tasks the user hasn't moved themselves, so the next `autoPlace` re-rolls those.
+ * Tasks they dragged, nudged or placed by hand keep their spot.
+ */
+export const clearSlots = (tasks: Task[]): Task[] =>
+  tasks.map((t) => (t.slot?.manual ? t : { ...t, slot: undefined }))

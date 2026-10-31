@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { calendarColors } from '../colors'
-import { DAY_SHORT, MONTHS, hhmm } from '../format'
+import { DAY_FULL, DAY_SHORT, MONTHS, hhmm } from '../format'
 import { fromDayNum, midnightOf } from '../ical/dates'
 import { eventsBetween, splitByDay, type Segment } from '../ical/expand'
 import type { StoredEvent } from '../ical/parse'
@@ -41,6 +41,7 @@ function EdgeMarker({ dir, segs }: { dir: 'top' | 'bottom'; segs: Segment[] }) {
   return (
     <div
       className={`edge ${dir}`}
+      role="note"
       title={`${up ? 'Before' : 'After'} ${hhmm(up ? DAY_START : DAY_END)}: ${names}`}
       aria-label={`${segs.length} ${up ? 'earlier' : 'later'} event${segs.length > 1 ? 's' : ''}: ${names}`}
     >
@@ -108,6 +109,7 @@ interface DayColumnProps {
   highlightId: string | null
   pxPerMin: number
   onTaskDown: (e: ReactPointerEvent, taskId: string) => void
+  onTaskKey: (e: ReactKeyboardEvent<HTMLElement>, taskId: string) => void
 }
 
 function DayColumn({
@@ -125,6 +127,7 @@ function DayColumn({
   highlightId,
   pxPerMin,
   onTaskDown,
+  onTaskKey,
 }: DayColumnProps) {
   const isShort = (start: number, end: number) => (end - start) * pxPerMin < SHORT_PX
   const daySegs = segments.filter((s) => s.day === day)
@@ -206,7 +209,11 @@ function DayColumn({
               data-group={groupOf(p.task)}
               className={`chip timed task-chip${isShort(p.startMin, end) ? ' short' : ''}${highlightId === p.task.id ? ' pulse' : ''}${p.forced ? ' forced' : ''}${floating ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
               onPointerDown={(e) => onTaskDown(e, p.task.id)}
-              title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(end)} (drag to move)`}
+              onKeyDown={(e) => onTaskKey(e, p.task.id)}
+              tabIndex={0}
+              role="button"
+              aria-label={`${p.task.title}, ${DAY_FULL[p.day]} ${hhmm(p.startMin)} to ${hhmm(end)}${p.forced ? ', overlaps something' : ''}. Arrow keys move it.`}
+              title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(end)} (drag or use arrow keys to move)`}
               style={{
                 ['--c' as string]: groupColors[groupOf(p.task)],
                 minHeight: minHeightFor(p.startMin, end, xRange(share)),
@@ -317,6 +324,27 @@ export default function WeekCalendar({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [pending, cancelPending])
+
+  /** Arrow keys move a focused task block: up/down by 15 minutes, left/right by a day. */
+  function nudgeTask(e: ReactKeyboardEvent<HTMLElement>, taskId: string) {
+    const dx = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+    const dy = e.key === 'ArrowDown' ? STEP_MIN : e.key === 'ArrowUp' ? -STEP_MIN : 0
+    const p = placements.find((x) => x.task.id === taskId)
+    if (!p || (!dx && !dy)) return
+    e.preventDefault()
+    const day = p.day + dx
+    const startMin = p.startMin + dy
+    const mins = p.task.mins
+    if (day < 0 || day > 6 || startMin < DAY_START || startMin + mins > DAY_END) return
+    if (slotFree(busy, placements, taskId, day, startMin, mins)) {
+      onMoveTask(taskId, day, startMin, false)
+      return
+    }
+    // Overlaps something: show it there and ask, as a drag would.
+    const r = e.currentTarget.getBoundingClientRect()
+    setDrag({ id: taskId, day, startMin, valid: false })
+    setPending({ id: taskId, day, startMin, x: r.left, y: r.top, conflicts: conflictsAt(taskId, day, startMin, mins) })
+  }
 
   /** Drag a task block: it follows the pointer in 15 minute steps and only lands on free time. */
   function startDrag(e: ReactPointerEvent, taskId: string) {
@@ -474,6 +502,7 @@ export default function WeekCalendar({
                 highlightId={highlightId}
                 pxPerMin={pxPerMin}
                 onTaskDown={startDrag}
+                onTaskKey={nudgeTask}
               />
             ))}
           </div>

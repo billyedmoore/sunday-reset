@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { fromDayNum } from '../ical/dates'
+import type { Group } from '../settings'
 import { DEFAULT_MINS, DURATIONS, formatDuration, tasksFor, totalMins, type Task } from '../tasks'
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -49,18 +50,22 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string, mins: 
 
 interface CardProps extends Handlers {
   variant: 'day' | 'general'
+  color: string
   title: string
   note: string
   day: number | null
   tasks: Task[]
 }
 
-function TaskCard({ variant, title, note, day, tasks, onAdd, onRemove, onSetMins }: CardProps) {
+function TaskCard({ variant, color, title, note, day, tasks, onAdd, onRemove, onSetMins }: CardProps) {
   const mine = tasksFor(tasks, day)
   return (
     <section className={`task-card ${variant}`}>
       <header>
-        <h3>{title}</h3>
+        <h3>
+          <i className="dot" style={{ ['--c' as string]: color }} />
+          {title}
+        </h3>
         <span className="note">{mine.length ? `${note} · ${formatDuration(totalMins(mine))}` : note}</span>
       </header>
       <ul>
@@ -86,9 +91,11 @@ interface Props extends Handlers {
   /** London day number of today, to start on today's tab when it's in the shown week. */
   today: number
   tasks: Task[]
+  /** Colour of each task group, shown as a dot so the lists match the calendar. */
+  colors: Record<Group, string>
 }
 
-export default function TaskList({ weekStart, today, tasks, ...handlers }: Props) {
+export default function TaskList({ weekStart, today, tasks, colors, ...handlers }: Props) {
   const [selected, setSelected] = useState(() => (today >= weekStart && today < weekStart + 7 ? today - weekStart : 0))
   const { d, m } = fromDayNum(weekStart + selected)
 
@@ -114,8 +121,8 @@ export default function TaskList({ weekStart, today, tasks, ...handlers }: Props
         })}
       </div>
 
-      <TaskCard variant="day" title={DAY_FULL[selected]} note={`${d} ${MONTHS[m - 1]}`} day={selected} tasks={tasks} {...handlers} />
-      <TaskCard variant="general" title="Any time this week" note="No set day" day={null} tasks={tasks} {...handlers} />
+      <TaskCard variant="day" color={colors.daily} title={DAY_FULL[selected]} note={`${d} ${MONTHS[m - 1]}`} day={selected} tasks={tasks} {...handlers} />
+      <TaskCard variant="general" color={colors.weekly} title="Any time this week" note="No set day" day={null} tasks={tasks} {...handlers} />
     </div>
   )
 }

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import ExportDialog from './components/ExportDialog'
 import TaskList from './components/TaskList'
 import WeekCalendar from './components/WeekCalendar'
 import { londonDay, upcomingMonday } from './ical/dates'
 import { importCalendarFile } from './ical/import'
 import type { StoredEvent } from './ical/parse'
 import { autoPlace, busyByDay, clearSlots, placementsOf, type ScheduleOptions } from './schedule'
+import { loadSettings, saveSettings, type Settings } from './settings'
 import { loadEvents, saveEvents } from './store'
 import {
   addTask,
@@ -47,6 +49,12 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => saveTasks(tasksByWeek), [tasksByWeek])
+
+  // Two fixed task groups (day to day, weekly): each has a colour and the name of its Google calendar.
+  const [settings, setSettings] = useState<Settings>(loadSettings)
+  const [exportOpen, setExportOpen] = useState(false)
+  useEffect(() => saveSettings(settings), [settings])
+  const groupColors = { daily: settings.daily.color, weekly: settings.weekly.color }
 
   // The lists belong to whichever week the calendar is showing.
   const tasks = tasksByWeek[weekStart] ?? NO_TASKS
@@ -97,6 +105,7 @@ export default function App() {
       <div className="layout">
         <TaskList
           today={today}
+          colors={groupColors}
           weekStart={weekStart}
           tasks={tasks}
           onAdd={(day, title, mins) => {
@@ -129,6 +138,9 @@ export default function App() {
               placements={placements}
               unplaced={unplaced}
               busy={busyTimes}
+              groupColors={groupColors}
+              canExport={placements.length > 0}
+              onExport={() => setExportOpen(true)}
               onMoveTask={(id, day, startMin, forced) => editTasks((t) => moveTask(t, id, day, startMin, forced))}
               canShuffle={tasks.length > 0}
               onShuffle={() => {
@@ -157,6 +169,14 @@ export default function App() {
           />
         </section>
       </div>
+      <ExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        tasks={tasks}
+        weekStart={weekStart}
+        settings={settings}
+        onSettings={setSettings}
+      />
     </div>
   )
 }

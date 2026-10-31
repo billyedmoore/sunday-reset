@@ -5,6 +5,7 @@ import { eventsBetween, splitByDay, type Segment } from '../ical/expand'
 import type { StoredEvent } from '../ical/parse'
 import { layoutLanes } from '../lanes'
 import { slotFree, type Busy, type Placement } from '../schedule'
+import { groupOf, type Group } from '../settings'
 import { formatDuration, type Task } from '../tasks'
 
 const START_HOUR = 6
@@ -39,6 +40,10 @@ interface Props {
   onShuffle: () => void
   /** When you're busy each day, so a dragged task can't land on an event. */
   busy: Busy[][]
+  /** Colour of each task group (day to day / weekly). */
+  groupColors: Record<Group, string>
+  canExport: boolean
+  onExport: () => void
   /** `forced` means the user chose to overlap something. */
   onMoveTask: (id: string, day: number, startMin: number, forced: boolean) => void
 }
@@ -55,6 +60,9 @@ export default function WeekCalendar({
   canShuffle,
   onShuffle,
   busy,
+  groupColors,
+  canExport,
+  onExport,
   onMoveTask,
 }: Props) {
   const colors = useMemo(() => calendarColors(events), [events])
@@ -214,6 +222,9 @@ export default function WeekCalendar({
         >
           🎲
         </button>
+        <button className="btn small" onClick={onExport} disabled={!canExport} title="Export tasks to Google Calendar">
+          Export
+        </button>
         <button className="btn small ghost" onClick={onImport}>Re-import</button>
       </div>
       {unplaced.length > 0 && (
@@ -314,6 +325,7 @@ export default function WeekCalendar({
                         onPointerDown={(e) => startDrag(e, p.task.id)}
                         title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(p.startMin + p.task.mins)} (drag to move)`}
                         style={{
+                          ['--c' as string]: groupColors[groupOf(p.task)],
                           top: pct(p.startMin),
                           height: `calc(${pct(p.startMin + p.task.mins)} - ${pct(p.startMin)} - 2px)`,
                           left: floating ? '2px' : `calc(${(share.lane / share.lanes) * 100}% + 2px)`,

@@ -96,13 +96,9 @@ function EditableTitle({ title, onSave }: { title: string; onSave: (title: strin
   )
 }
 
-interface RowProps {
+interface RowProps extends Omit<Handlers, 'onAdd'> {
   task: Task
   weekStart: number
-  onRemove: Handlers['onRemove']
-  onSetMins: Handlers['onSetMins']
-  onEdit: Handlers['onEdit']
-  onPlaceAnyway: Handlers['onPlaceAnyway']
 }
 
 function TaskRow({ task, weekStart, onRemove, onSetMins, onEdit, onPlaceAnyway }: RowProps) {
@@ -152,7 +148,7 @@ interface CardProps extends Handlers {
   weekEmpty: boolean
 }
 
-function TaskCard({ variant, color, title, note, day, tasks, weekStart, notice, weekEmpty, ...handlers }: CardProps) {
+function TaskCard({ variant, color, title, note, day, tasks, weekStart, notice, weekEmpty, onAdd, ...rowHandlers }: CardProps) {
   const mine = tasksFor(tasks, day)
   return (
     <section className={`task-card ${variant}`}>
@@ -170,18 +166,10 @@ function TaskCard({ variant, color, title, note, day, tasks, weekStart, notice, 
           </li>
         )}
         {mine.map((t) => (
-          <TaskRow
-            key={t.id}
-            task={t}
-            weekStart={weekStart}
-            onRemove={handlers.onRemove}
-            onSetMins={handlers.onSetMins}
-            onEdit={handlers.onEdit}
-            onPlaceAnyway={handlers.onPlaceAnyway}
-          />
+          <TaskRow key={t.id} task={t} weekStart={weekStart} {...rowHandlers} />
         ))}
       </ul>
-      <AddRow label={title} onAdd={(text, mins) => handlers.onAdd(day, text, mins)} />
+      <AddRow label={title} onAdd={(text, mins) => onAdd(day, text, mins)} />
       {notice && notice.day === day && (
         <p key={notice.key} className="placed-note" role="status">
           {notice.text}

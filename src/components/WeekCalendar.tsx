@@ -91,8 +91,6 @@ export default function WeekCalendar({
     return () => ro.disconnect()
   }, [])
   const pxPerMin = (colH || 640) / ((END_HOUR - START_HOUR) * 60)
-  /** Where a block visually ends: short events are drawn at least MIN_CHIP_PX tall. */
-  const visualEnd = (start: number, end: number) => Math.max(end, start + Math.ceil(MIN_CHIP_PX / pxPerMin))
   const isShort = (start: number, end: number) => (end - start) * pxPerMin < SHORT_PX
   const [drag, setDrag] = useState<{ id: string; day: number; startMin: number; valid: boolean } | null>(null)
   // A drop that overlaps something waits here for the user to say "put it there anyway" or cancel.
@@ -290,13 +288,27 @@ export default function WeekCalendar({
               // dragged floats above instead and doesn't reshuffle the others.
               const forcedHere = shown.filter((p) => p.day === i && p.forced && drag?.id !== p.task.id)
               const lanes = layoutLanes([
-                ...dayEvents.map((s) => ({ key: eventKey(s), startMin: s.startMin, endMin: visualEnd(s.startMin, s.endMin) })),
-                ...forcedHere.map((p) => ({
-                  key: `task-${p.task.id}`,
-                  startMin: p.startMin,
-                  endMin: visualEnd(p.startMin, p.startMin + p.task.mins),
-                })),
+                ...dayEvents.map((s) => ({ key: eventKey(s), startMin: s.startMin, endMin: s.endMin })),
+                ...forcedHere.map((p) => ({ key: `task-${p.task.id}`, startMin: p.startMin, endMin: p.startMin + p.task.mins })),
               ])
+              // Where each drawn block sits (time and share of the column width), so a short block that
+              // is drawn a little taller than its true length is never drawn into the next block below it.
+              const shareOf = (p: Placement) => {
+                const own = p.forced ? lanes.get(`task-${p.task.id}`) : undefined
+                return own && own.lanes > 1 ? own : p.forced ? { lane: 1, lanes: 2 } : { lane: 0, lanes: 1 }
+              }
+              const xRange = (s: { lane: number; lanes: number }) => [s.lane / s.lanes, (s.lane + 1) / s.lanes] as const
+              const drawn = [
+                ...dayEvents.map((s) => ({ start: s.startMin, x: xRange(lanes.get(eventKey(s)) ?? { lane: 0, lanes: 1 }) })),
+                ...shown.filter((p) => p.day === i && drag?.id !== p.task.id).map((p) => ({ start: p.startMin, x: xRange(shareOf(p)) })),
+              ]
+              /** The smallest height (px) a block may be drawn at: readable, but never into the block below. */
+              const minHeightFor = (start: number, end: number, x: readonly [number, number]) => {
+                let next = Infinity
+                for (const o of drawn) if (o.start >= end && o.start < next && o.x[0] < x[1] && x[0] < o.x[1]) next = o.start
+                const room = next === Infinity ? MIN_CHIP_PX : (next - start) * pxPerMin - 2
+                return `${Math.max(6, Math.min(MIN_CHIP_PX, room))}px`
+              }
               const blocks = segments.filter((s) => s.wholeDay && s.day === day)
               return (
                 <div
@@ -332,6 +344,7 @@ export default function WeekCalendar({
                       title={`${seg.occ.title}${rangeLabel(seg) ? `, ${rangeLabel(seg)}` : ''} (${seg.occ.calendar})`}
                       style={{
                         ['--c' as string]: colors[seg.occ.calendar],
+                        minHeight: minHeightFor(seg.startMin, seg.endMin, xRange({ lane, lanes: count })),
                         top: pct(seg.startMin),
                         height: `calc(${pct(seg.endMin)} - ${pct(seg.startMin)} - 2px)`,
                         left: `calc(${(lane / count) * 100}% + 2px)`,
@@ -348,8 +361,7 @@ export default function WeekCalendar({
                     .map((p) => {
                       // Forced tasks take their lane beside the event they overlap. With nothing beside
                       // them (e.g. over a whole-day block) they take the right half so the block shows.
-                      const own = p.forced ? lanes.get(`task-${p.task.id}`) : undefined
-                      const share = own && own.lanes > 1 ? own : p.forced ? { lane: 1, lanes: 2 } : { lane: 0, lanes: 1 }
+                      const share = shareOf(p)
                       const floating = drag?.id === p.task.id
                       return (
                       <div
@@ -360,6 +372,7 @@ export default function WeekCalendar({
                         title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(p.startMin + p.task.mins)} (drag to move)`}
                         style={{
                           ['--c' as string]: groupColors[groupOf(p.task)],
+                          minHeight: minHeightFor(p.startMin, p.startMin + p.task.mins, xRange(share)),
                           top: pct(p.startMin),
                           height: `calc(${pct(p.startMin + p.task.mins)} - ${pct(p.startMin)} - 2px)`,
                           left: floating ? '2px' : `calc(${(share.lane / share.lanes) * 100}% + 2px)`,

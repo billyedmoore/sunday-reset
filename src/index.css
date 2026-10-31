@@ -438,7 +438,7 @@ h1 {
   top: 2px;
   bottom: 2px;
   margin: 0;
-  background: color-mix(in srgb, var(--c) 28%, var(--surface));
+  background: color-mix(in srgb, var(--c) 16%, var(--surface));
   z-index: 0;
 }
 
@@ -924,4 +924,10 @@ h1 {
 
 .chip.task-chip[data-group='weekly']::after {
   content: '◆';
+}
+
+.eg-summary {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }

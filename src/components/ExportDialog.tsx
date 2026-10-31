@@ -88,9 +88,12 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
         </ul>
       )}
 
+      <p className="eg-summary">
+        {list.length} task{list.length === 1 ? '' : 's'}
+        {list.length ? ` · ${formatDuration(totalMins(list))}` : ''}
+      </p>
       <button className="btn" onClick={onDownload} disabled={list.length === 0}>
-        Download .ics ({list.length} task{list.length === 1 ? '' : 's'}
-        {list.length ? ` · ${formatDuration(totalMins(list))}` : ''})
+        Download .ics
       </button>
     </section>
   )

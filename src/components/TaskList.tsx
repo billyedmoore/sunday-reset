@@ -64,10 +64,10 @@ function TaskCard({ variant, color, title, note, day, tasks, onAdd, onRemove, on
   return (
     <section className={`task-card ${variant}`}>
       <header>
-        <h3>
+        <h2>
           <i className="dot" style={{ ['--c' as string]: color }} />
           {title}
-        </h3>
+        </h2>
         <span className="note">{mine.length ? `${note} · ${formatDuration(totalMins(mine))}` : note}</span>
       </header>
       <ul>

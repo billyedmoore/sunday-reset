@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { DAY_FULL, DAY_SHORT, MONTHS } from '../format'
 import { fromDayNum } from '../ical/dates'
 import { GROUP_LABEL, type Group } from '../settings'
@@ -49,7 +49,7 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string, mins: 
     <form className="add-row" onSubmit={submit}>
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a task…" aria-label={`New task: ${label}`} />
       <DurationSelect value={mins} onChange={setMins} label="How long it will take" />
-      <button className="btn small" type="submit" aria-label={`Add task: ${label}`}>
+      <button className="btn small" type="submit" disabled={!title.trim()} aria-label={`Add task: ${label}`}>
         +
       </button>
     </form>
@@ -60,6 +60,8 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string, mins: 
 function EditableTitle({ title, onSave }: { title: string; onSave: (title: string) => void }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
+  // Enter and Escape unmount the input, which fires a blur; this stops that finishing a second time.
+  const finished = useRef(false)
 
   if (!editing) {
     return (
@@ -67,6 +69,7 @@ function EditableTitle({ title, onSave }: { title: string; onSave: (title: strin
         className="title title-button"
         onClick={() => {
           setDraft(title)
+          finished.current = false
           setEditing(true)
         }}
         aria-label={`Rename task: ${title}`}
@@ -77,6 +80,8 @@ function EditableTitle({ title, onSave }: { title: string; onSave: (title: strin
     )
   }
   const finish = (save: boolean) => {
+    if (finished.current) return
+    finished.current = true
     setEditing(false)
     if (save && draft.trim() && draft.trim() !== title) onSave(draft)
   }
@@ -112,14 +117,14 @@ function TaskRow({ task, weekStart, onRemove, onSetMins, onEdit, onPlaceAnyway }
         aria-label={`Day for ${task.title}`}
         onChange={(e) => onEdit(task.id, { day: e.target.value === 'any' ? null : Number(e.target.value) })}
       >
-        <option value="any">Any</option>
+        <option value="any">Any time</option>
         {DAY_SHORT.map((name, i) => (
           <option key={name} value={i}>
             {name} {fromDayNum(weekStart + i).d}
           </option>
         ))}
       </select>
-      <DurationSelect value={task.mins} onChange={(m) => onSetMins(task.id, m)} label={`Time for ${task.title}`} />
+      <DurationSelect value={task.mins} onChange={(m) => onSetMins(task.id, m)} label={`Length of ${task.title}`} />
       <button className="x" onClick={() => onRemove(task.id)} aria-label={`Delete ${task.title}`}>
         ×
       </button>

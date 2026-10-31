@@ -65,6 +65,21 @@ export const DAY_END = 22 * 60
 /** Tasks start on multiples of this many minutes. */
 export const STEP_MIN = 15
 
+/** The time a placed task takes up. */
+const busyOf = (p: Placement): Busy => ({ start: p.startMin, end: p.startMin + p.task.mins })
+
+/** Spread into a slot or placement to mark it as one the user forced onto a conflict. */
+const forcedFlag = (forced: boolean | undefined) => (forced ? { forced: true } : {})
+
+/** Whether a task's slot is on a valid day (its own, if pinned) and inside the day window. */
+const inRange = (t: Task, dayStart: number, dayEnd: number) =>
+  t.slot !== undefined &&
+  t.slot.day >= 0 &&
+  t.slot.day <= 6 &&
+  (t.day === null || t.day === t.slot.day) &&
+  t.slot.startMin >= dayStart &&
+  t.slot.startMin + t.mins <= dayEnd
+
 const overlaps = (list: Busy[], s: number, mins: number, gap: number) =>
   list.some((b) => s < b.end + gap && s + mins + gap > b.start)
 
@@ -81,9 +96,7 @@ export function slotFree(
   mins: number,
 ): boolean {
   if (day < 0 || day > 6 || startMin < DAY_START || startMin + mins > DAY_END) return false
-  const others = placements
-    .filter((p) => p.day === day && p.task.id !== taskId)
-    .map((p) => ({ start: p.startMin, end: p.startMin + p.task.mins }))
+  const others = placements.filter((p) => p.day === day && p.task.id !== taskId).map(busyOf)
   return !overlaps([...busy[day], ...others], startMin, mins, 0)
 }
 
@@ -110,11 +123,15 @@ export function scheduleTasks(tasks: Task[], opts: ScheduleOptions): ScheduleRes
     return starts
   }
 
-  const place = (task: Task, day: number, starts: number[]) => {
-    const startMin = starts[Math.floor(rand() * starts.length)]
-    taken[day].push({ start: startMin, end: startMin + task.mins })
+  const commit = (task: Task, day: number, startMin: number, forced = false) => {
+    const placement: Placement = { task, day, startMin, ...forcedFlag(forced) }
+    taken[day].push(busyOf(placement))
     load[day] += task.mins
-    placements.push({ task, day, startMin })
+    placements.push(placement)
+  }
+
+  const place = (task: Task, day: number, starts: number[]) => {
+    commit(task, day, starts[Math.floor(rand() * starts.length)])
   }
 
   // Keep slots that are still valid (right day, inside the window, not overlapping anything); re-place
@@ -122,23 +139,11 @@ export function scheduleTasks(tasks: Task[], opts: ScheduleOptions): ScheduleRes
   // Slots the user forced onto a conflict are kept too, and are handled last so they never push a
   // normal slot out of the way.
   const toPlace: Task[] = []
-  const inRange = (t: Task) =>
-    t.slot !== undefined &&
-    t.slot.day >= 0 &&
-    t.slot.day <= 6 &&
-    (t.day === null || t.day === t.slot.day) &&
-    t.slot.startMin >= dayStart &&
-    t.slot.startMin + t.mins <= dayEnd
-  const keep = (task: Task, forced: boolean) => {
-    const { day, startMin } = task.slot!
-    taken[day].push({ start: startMin, end: startMin + task.mins })
-    load[day] += task.mins
-    placements.push({ task, day, startMin, ...(forced ? { forced: true } : {}) })
-  }
+  const keep = (task: Task, forced: boolean) => commit(task, task.slot!.day, task.slot!.startMin, forced)
   for (const forcedPass of [false, true]) {
     for (const task of tasks) {
       if (!task.slot || Boolean(task.slot.forced) !== forcedPass) continue
-      if (!inRange(task)) {
+      if (!inRange(task, dayStart, dayEnd)) {
         toPlace.push(task)
         continue
       }
@@ -197,7 +202,7 @@ export function autoPlace(tasks: Task[], opts: ScheduleOptions): Task[] {
   const slots = new Map(
     scheduleTasks(tasks, opts).placements.map((p) => [
       p.task.id,
-      { day: p.day, startMin: p.startMin, ...(p.forced ? { forced: true } : {}) },
+      { day: p.day, startMin: p.startMin, ...forcedFlag(p.forced) },
     ]),
   )
   return tasks.map((t) => {
@@ -212,7 +217,7 @@ export function autoPlace(tasks: Task[], opts: ScheduleOptions): Task[] {
 /** The tasks that currently have a place on the calendar, with their forced flag carried across. */
 export const placementsOf = (tasks: Task[]): Placement[] =>
   tasks.flatMap((t) =>
-    t.slot ? [{ task: t, day: t.slot.day, startMin: t.slot.startMin, ...(t.slot.forced ? { forced: true } : {}) }] : [],
+    t.slot ? [{ task: t, day: t.slot.day, startMin: t.slot.startMin, ...forcedFlag(t.slot.forced) }] : [],
   )
 
 /**
@@ -244,7 +249,7 @@ export function leastBadSlot(
     if (day < 0 || day > 6) continue
     const others: Busy[] = [
       ...busy[day],
-      ...placements.filter((p) => p.day === day && p.task.id !== task.id).map((p) => ({ start: p.startMin, end: p.startMin + p.task.mins })),
+      ...placements.filter((p) => p.day === day && p.task.id !== task.id).map(busyOf),
     ]
     const load = others.reduce((n, b) => n + b.end - b.start, 0)
     for (let s = DAY_START; s + task.mins <= DAY_END; s += step) {

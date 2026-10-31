@@ -1,20 +1,53 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { calendarColors } from '../colors'
 import { DAY_SHORT, MONTHS, hhmm } from '../format'
 import { fromDayNum, midnightOf } from '../ical/dates'
 import { eventsBetween, splitByDay, type Segment } from '../ical/expand'
 import type { StoredEvent } from '../ical/parse'
 import { layoutLanes } from '../lanes'
-import { slotFree, type Busy, type Placement } from '../schedule'
-import { GROUP_LABEL, groupOf, type Group } from '../settings'
+import { DAY_END, DAY_START, STEP_MIN, slotFree, type Busy, type Placement } from '../schedule'
+import { GROUPS, GROUP_LABEL, groupOf, type Group } from '../settings'
 import { formatDuration, type Task } from '../tasks'
 
-const START_HOUR = 6
-const END_HOUR = 22
+const START_HOUR = DAY_START / 60
+const END_HOUR = DAY_END / 60
+const RANGE_MIN = DAY_END - DAY_START
 /** The shortest a block is drawn, so a 15 minute event is still readable without looking longer. */
 const MIN_CHIP_PX = 14
 /** Blocks shorter than this (about an hour on a laptop) show the title and time on one line. */
 const SHORT_PX = 48
+
+type Lane = { lane: number; lanes: number }
+
+/** Position within the visible hours, as a percentage of the column height. */
+const pct = (min: number) => `${Math.min(100, Math.max(0, ((min - DAY_START) / RANGE_MIN) * 100))}%`
+/** The share of the column width a lane covers, from 0 to 1. */
+const xRange = (s: Lane) => [s.lane / s.lanes, (s.lane + 1) / s.lanes] as const
+const segKey = (s: Segment) => `${s.occ.id}-${s.day}`
+
+function laneStyle(lane: number, lanes: number): CSSProperties {
+  return { left: `calc(${(lane / lanes) * 100}% + 2px)`, width: `calc(${100 / lanes}% - 4px)` }
+}
+
+function timeStyle(start: number, end: number): CSSProperties {
+  return { top: pct(start), height: `calc(${pct(end)} - ${pct(start)} - 2px)` }
+}
+
+/** Marks events that fall wholly outside the visible hours. */
+function EdgeMarker({ dir, segs }: { dir: 'top' | 'bottom'; segs: Segment[] }) {
+  if (segs.length === 0) return null
+  const names = segs.map((s) => s.occ.title).join(', ')
+  const up = dir === 'top'
+  return (
+    <div
+      className={`edge ${dir}`}
+      title={`${up ? 'Before' : 'After'} ${hhmm(up ? DAY_START : DAY_END)}: ${names}`}
+      aria-label={`${segs.length} ${up ? 'earlier' : 'later'} event${segs.length > 1 ? 's' : ''}: ${names}`}
+    >
+      {up ? '↑' : '↓'} {segs.length}
+    </div>
+  )
+}
 
 function rangeLabel(s: Segment): string {
   if (s.occ.allDay || s.wholeDay) return ''
@@ -55,6 +88,144 @@ interface Props {
   highlightId: string | null
 }
 
+interface DayColumnProps {
+  colRef: (el: HTMLDivElement | null) => void
+  /** Index of the day within the week, 0 for Monday. */
+  index: number
+  /** London day number. */
+  day: number
+  isToday: boolean
+  hourCount: number
+  segments: Segment[]
+  /** Task placements, with the one being dragged shown at its dragged position. */
+  shown: Placement[]
+  drag: { id: string; valid: boolean } | null
+  clashing: Set<string>
+  colors: Record<string, string>
+  groupColors: Record<Group, string>
+  highlightId: string | null
+  pxPerMin: number
+  onTaskDown: (e: ReactPointerEvent, taskId: string) => void
+}
+
+function DayColumn({
+  colRef,
+  index: i,
+  day,
+  isToday,
+  hourCount,
+  segments,
+  shown,
+  drag,
+  clashing,
+  colors,
+  groupColors,
+  highlightId,
+  pxPerMin,
+  onTaskDown,
+}: DayColumnProps) {
+  const isShort = (start: number, end: number) => (end - start) * pxPerMin < SHORT_PX
+  const daySegs = segments.filter((s) => s.day === day)
+  const timed = daySegs.filter((s) => !s.wholeDay)
+  const dayEvents = timed.filter((s) => s.endMin > DAY_START && s.startMin < DAY_END)
+  // Events wholly outside the visible hours get a small marker instead of vanishing.
+  const earlier = timed.filter((s) => s.endMin <= DAY_START)
+  const later = timed.filter((s) => s.startMin >= DAY_END)
+  // Events and forced tasks share lanes, so an overlap puts them side by side. A task being
+  // dragged floats above instead and doesn't reshuffle the others.
+  const forcedHere = shown.filter((p) => p.day === i && p.forced && drag?.id !== p.task.id)
+  const lanes = layoutLanes([
+    ...dayEvents.map((s) => ({ key: segKey(s), startMin: s.startMin, endMin: s.endMin })),
+    ...forcedHere.map((p) => ({ key: `task-${p.task.id}`, startMin: p.startMin, endMin: p.startMin + p.task.mins })),
+  ])
+  const laneOf = (s: Segment): Lane => lanes.get(segKey(s)) ?? { lane: 0, lanes: 1 }
+  // Where each drawn block sits (time and share of the column width), so a short block that
+  // is drawn a little taller than its true length is never drawn into the next block below it.
+  const shareOf = (p: Placement): Lane => {
+    const own = p.forced ? lanes.get(`task-${p.task.id}`) : undefined
+    return own && own.lanes > 1 ? own : p.forced ? { lane: 1, lanes: 2 } : { lane: 0, lanes: 1 }
+  }
+  const drawn = [
+    ...dayEvents.map((s) => ({ start: s.startMin, x: xRange(laneOf(s)) })),
+    ...shown.filter((p) => p.day === i && drag?.id !== p.task.id).map((p) => ({ start: p.startMin, x: xRange(shareOf(p)) })),
+  ]
+  /** The smallest height (px) a block may be drawn at: readable, but never into the block below. */
+  const minHeightFor = (start: number, end: number, x: readonly [number, number]) => {
+    let next = Infinity
+    for (const o of drawn) if (o.start >= end && o.start < next && o.x[0] < x[1] && x[0] < o.x[1]) next = o.start
+    const room = next === Infinity ? MIN_CHIP_PX : (next - start) * pxPerMin - 2
+    return `${Math.max(6, Math.min(MIN_CHIP_PX, room))}px`
+  }
+  const blocks = daySegs.filter((s) => s.wholeDay)
+  return (
+    <div ref={colRef} className={`col${isToday ? ' today' : ''}`} style={{ ['--n' as string]: hourCount }}>
+      {blocks.map((seg, b) => (
+        <div
+          key={segKey(seg)}
+          className={`chip block${clashing.has(segKey(seg)) ? ' clash' : ''}`}
+          title={seg.occ.calendar}
+          style={{ ['--c' as string]: colors[seg.occ.calendar], ...laneStyle(b, blocks.length) }}
+        >
+          <div className="t">{seg.occ.title}</div>
+          {seg.occ.location && <div className="m">{seg.occ.location}</div>}
+        </div>
+      ))}
+      {dayEvents.map((seg) => {
+        const own = laneOf(seg)
+        const short = isShort(seg.startMin, seg.endMin)
+        return (
+          <div
+            key={segKey(seg)}
+            className={`chip timed${short ? ' short' : ''}${seg.continuesBefore ? ' before' : ''}${clashing.has(segKey(seg)) ? ' clash' : ''}`}
+            title={`${seg.occ.title}${rangeLabel(seg) ? `, ${rangeLabel(seg)}` : ''} (${seg.occ.calendar})`}
+            style={{
+              ['--c' as string]: colors[seg.occ.calendar],
+              minHeight: minHeightFor(seg.startMin, seg.endMin, xRange(own)),
+              ...timeStyle(seg.startMin, seg.endMin),
+              ...laneStyle(own.lane, own.lanes),
+            }}
+          >
+            <div className="t">{seg.occ.title}</div>
+            <div className="m">{short ? rangeLabel(seg) : timeLabel(seg)}</div>
+          </div>
+        )
+      })}
+      {shown
+        .filter((p) => p.day === i)
+        .map((p) => {
+          // Forced tasks take their lane beside the event they overlap. With nothing beside
+          // them (e.g. over a whole-day block) they take the right half so the block shows.
+          const share = shareOf(p)
+          const floating = drag?.id === p.task.id
+          const end = p.startMin + p.task.mins
+          return (
+            <div
+              key={p.task.id}
+              data-group={groupOf(p.task)}
+              className={`chip timed task-chip${isShort(p.startMin, end) ? ' short' : ''}${highlightId === p.task.id ? ' pulse' : ''}${p.forced ? ' forced' : ''}${floating ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
+              onPointerDown={(e) => onTaskDown(e, p.task.id)}
+              title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(end)} (drag to move)`}
+              style={{
+                ['--c' as string]: groupColors[groupOf(p.task)],
+                minHeight: minHeightFor(p.startMin, end, xRange(share)),
+                ...timeStyle(p.startMin, end),
+                ...(floating ? laneStyle(0, 1) : laneStyle(share.lane, share.lanes)),
+              }}
+            >
+              <div className="t">{p.task.title}</div>
+              <div className="m">
+                {p.forced ? '⚠ overlaps · ' : ''}
+                {hhmm(p.startMin)} · {formatDuration(p.task.mins)}
+              </div>
+            </div>
+          )
+        })}
+      <EdgeMarker dir="top" segs={earlier} />
+      <EdgeMarker dir="bottom" segs={later} />
+    </div>
+  )
+}
+
 export default function WeekCalendar({
   events,
   weekStart,
@@ -90,8 +261,7 @@ export default function WeekCalendar({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  const pxPerMin = (colH || 640) / ((END_HOUR - START_HOUR) * 60)
-  const isShort = (start: number, end: number) => (end - start) * pxPerMin < SHORT_PX
+  const pxPerMin = (colH || 640) / RANGE_MIN
   const [drag, setDrag] = useState<{ id: string; day: number; startMin: number; valid: boolean } | null>(null)
   // A drop that overlaps something waits here for the user to say "put it there anyway" or cancel.
   const [pending, setPending] = useState<{
@@ -108,7 +278,7 @@ export default function WeekCalendar({
     const mins = placements.find((p) => p.task.id === drag.id)?.task.mins ?? 0
     for (const seg of segments) {
       if (!seg.occ.allDay && seg.day === weekStart + drag.day && seg.startMin < drag.startMin + mins && seg.endMin > drag.startMin) {
-        clashing.add(`${seg.occ.id}-${seg.day}`)
+        clashing.add(segKey(seg))
       }
     }
   }
@@ -126,23 +296,24 @@ export default function WeekCalendar({
     return [...new Set([...events, ...tasks])]
   }
 
-  function resolvePending(accept: boolean) {
-    if (pending && accept) onMoveTask(pending.id, pending.day, pending.startMin, true)
+  const cancelPending = useCallback(() => {
     setPending(null)
     setDrag(null)
+  }, [])
+
+  function resolvePending(accept: boolean) {
+    if (pending && accept) onMoveTask(pending.id, pending.day, pending.startMin, true)
+    cancelPending()
   }
 
   useEffect(() => {
     if (!pending) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setPending(null)
-        setDrag(null)
-      }
+      if (e.key === 'Escape') cancelPending()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [pending])
+  }, [pending, cancelPending])
 
   /** Drag a task block: it follows the pointer in 15 minute steps and only lands on free time. */
   function startDrag(e: ReactPointerEvent, taskId: string) {
@@ -150,21 +321,21 @@ export default function WeekCalendar({
     const firstCol = colRefs.current[0]
     if (e.button !== 0 || !p || !firstCol) return
     e.preventDefault()
-    const rangeMin = (END_HOUR - START_HOUR) * 60
+    const { task, day: fromDay, startMin: fromMin } = p
     const minuteAt = (y: number) => {
       const r = firstCol.getBoundingClientRect()
-      return START_HOUR * 60 + ((y - r.top) / r.height) * rangeMin
+      return DAY_START + ((y - r.top) / r.height) * RANGE_MIN
     }
-    const grab = minuteAt(e.clientY) - p.startMin // where inside the block it was picked up
+    const grab = minuteAt(e.clientY) - fromMin // where inside the block it was picked up
     const origin = { x: e.clientX, y: e.clientY }
     let moved = false
 
     const target = (ev: PointerEvent) => {
       const r = firstCol.getBoundingClientRect()
       const day = Math.min(6, Math.max(0, Math.floor((ev.clientX - r.left) / r.width)))
-      const raw = Math.round((minuteAt(ev.clientY) - grab) / 15) * 15
-      const startMin = Math.min(END_HOUR * 60 - p!.task.mins, Math.max(START_HOUR * 60, raw))
-      return { day, startMin, valid: slotFree(busy, placements, taskId, day, startMin, p!.task.mins) }
+      const raw = Math.round((minuteAt(ev.clientY) - grab) / STEP_MIN) * STEP_MIN
+      const startMin = Math.min(DAY_END - task.mins, Math.max(DAY_START, raw))
+      return { day, startMin, valid: slotFree(busy, placements, taskId, day, startMin, task.mins) }
     }
     function onMove(ev: PointerEvent) {
       if (!moved && Math.hypot(ev.clientX - origin.x, ev.clientY - origin.y) < 4) return
@@ -173,7 +344,7 @@ export default function WeekCalendar({
     }
     function finish(ev: PointerEvent | null) {
       window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('keydown', onKey)
       if (!ev || !moved) {
@@ -181,7 +352,7 @@ export default function WeekCalendar({
         return
       }
       const t = target(ev)
-      if (t.day === p!.day && t.startMin === p!.startMin) {
+      if (t.day === fromDay && t.startMin === fromMin) {
         setDrag(null)
       } else if (t.valid) {
         setDrag(null)
@@ -195,12 +366,9 @@ export default function WeekCalendar({
           startMin: t.startMin,
           x: ev.clientX,
           y: ev.clientY,
-          conflicts: conflictsAt(taskId, t.day, t.startMin, p!.task.mins),
+          conflicts: conflictsAt(taskId, t.day, t.startMin, task.mins),
         })
       }
-    }
-    function onUp(ev: PointerEvent) {
-      finish(ev)
     }
     function onCancel() {
       finish(null)
@@ -209,17 +377,13 @@ export default function WeekCalendar({
       if (ev.key === 'Escape') finish(null)
     }
     window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointerup', finish)
     window.addEventListener('pointercancel', onCancel)
     window.addEventListener('keydown', onKey)
   }
 
-  const timed = segments.filter((s) => !s.wholeDay)
   // A fixed 06:00–22:00 window, scaled to fit the panel. Events are clipped to it.
   const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i)
-  const pct = (min: number) =>
-    `${Math.min(100, Math.max(0, ((min - START_HOUR * 60) / ((END_HOUR - START_HOUR) * 60)) * 100))}%`
-  const visible = (s: Segment) => s.endMin > START_HOUR * 60 && s.startMin < END_HOUR * 60
 
   const first = fromDayNum(weekStart)
   const last = fromDayNum(weekStart + 6)
@@ -277,137 +441,27 @@ export default function WeekCalendar({
                 </div>
               ))}
             </div>
-            {DAY_SHORT.map((name, i) => {
-              const day = weekStart + i
-              const dayEvents = timed.filter((s) => s.day === day && visible(s))
-              // Events wholly outside the visible hours get a small marker instead of vanishing.
-              const earlier = timed.filter((s) => s.day === day && s.endMin <= START_HOUR * 60)
-              const later = timed.filter((s) => s.day === day && s.startMin >= END_HOUR * 60)
-              const eventKey = (s: Segment) => `${s.occ.id}-${s.day}`
-              // Events and forced tasks share lanes, so an overlap puts them side by side. A task being
-              // dragged floats above instead and doesn't reshuffle the others.
-              const forcedHere = shown.filter((p) => p.day === i && p.forced && drag?.id !== p.task.id)
-              const lanes = layoutLanes([
-                ...dayEvents.map((s) => ({ key: eventKey(s), startMin: s.startMin, endMin: s.endMin })),
-                ...forcedHere.map((p) => ({ key: `task-${p.task.id}`, startMin: p.startMin, endMin: p.startMin + p.task.mins })),
-              ])
-              // Where each drawn block sits (time and share of the column width), so a short block that
-              // is drawn a little taller than its true length is never drawn into the next block below it.
-              const shareOf = (p: Placement) => {
-                const own = p.forced ? lanes.get(`task-${p.task.id}`) : undefined
-                return own && own.lanes > 1 ? own : p.forced ? { lane: 1, lanes: 2 } : { lane: 0, lanes: 1 }
-              }
-              const xRange = (s: { lane: number; lanes: number }) => [s.lane / s.lanes, (s.lane + 1) / s.lanes] as const
-              const drawn = [
-                ...dayEvents.map((s) => ({ start: s.startMin, x: xRange(lanes.get(eventKey(s)) ?? { lane: 0, lanes: 1 }) })),
-                ...shown.filter((p) => p.day === i && drag?.id !== p.task.id).map((p) => ({ start: p.startMin, x: xRange(shareOf(p)) })),
-              ]
-              /** The smallest height (px) a block may be drawn at: readable, but never into the block below. */
-              const minHeightFor = (start: number, end: number, x: readonly [number, number]) => {
-                let next = Infinity
-                for (const o of drawn) if (o.start >= end && o.start < next && o.x[0] < x[1] && x[0] < o.x[1]) next = o.start
-                const room = next === Infinity ? MIN_CHIP_PX : (next - start) * pxPerMin - 2
-                return `${Math.max(6, Math.min(MIN_CHIP_PX, room))}px`
-              }
-              const blocks = segments.filter((s) => s.wholeDay && s.day === day)
-              return (
-                <div
-                  key={name}
-                  ref={(el) => {
-                    colRefs.current[i] = el
-                  }}
-                  className={`col${day === today ? ' today' : ''}`}
-                  style={{ ['--n' as string]: hours.length }}
-                >
-                  {blocks.map((seg, b) => (
-                    <div
-                      key={`${seg.occ.id}-${seg.day}`}
-                      className={`chip block${clashing.has(`${seg.occ.id}-${seg.day}`) ? ' clash' : ''}`}
-                      title={seg.occ.calendar}
-                      style={{
-                        ['--c' as string]: colors[seg.occ.calendar],
-                        left: `calc(${(b / blocks.length) * 100}% + 2px)`,
-                        width: `calc(${100 / blocks.length}% - 4px)`,
-                      }}
-                    >
-                      <div className="t">{seg.occ.title}</div>
-                      {seg.occ.location && <div className="m">{seg.occ.location}</div>}
-                    </div>
-                  ))}
-                  {dayEvents.map((seg) => {
-                    const { lane, lanes: count } = lanes.get(eventKey(seg)) ?? { lane: 0, lanes: 1 }
-                    const short = isShort(seg.startMin, seg.endMin)
-                    return (
-                    <div
-                      key={`${seg.occ.id}-${seg.day}`}
-                      className={`chip timed${short ? ' short' : ''}${seg.continuesBefore ? ' before' : ''}${clashing.has(`${seg.occ.id}-${seg.day}`) ? ' clash' : ''}`}
-                      title={`${seg.occ.title}${rangeLabel(seg) ? `, ${rangeLabel(seg)}` : ''} (${seg.occ.calendar})`}
-                      style={{
-                        ['--c' as string]: colors[seg.occ.calendar],
-                        minHeight: minHeightFor(seg.startMin, seg.endMin, xRange({ lane, lanes: count })),
-                        top: pct(seg.startMin),
-                        height: `calc(${pct(seg.endMin)} - ${pct(seg.startMin)} - 2px)`,
-                        left: `calc(${(lane / count) * 100}% + 2px)`,
-                        width: `calc(${100 / count}% - 4px)`,
-                      }}
-                    >
-                      <div className="t">{seg.occ.title}</div>
-                      <div className="m">{short ? rangeLabel(seg) : timeLabel(seg)}</div>
-                    </div>
-                    )
-                  })}
-                  {shown
-                    .filter((p) => p.day === i)
-                    .map((p) => {
-                      // Forced tasks take their lane beside the event they overlap. With nothing beside
-                      // them (e.g. over a whole-day block) they take the right half so the block shows.
-                      const share = shareOf(p)
-                      const floating = drag?.id === p.task.id
-                      return (
-                      <div
-                        key={p.task.id}
-                        data-group={groupOf(p.task)}
-                        className={`chip timed task-chip${isShort(p.startMin, p.startMin + p.task.mins) ? ' short' : ''}${highlightId === p.task.id ? ' pulse' : ''}${p.forced ? ' forced' : ''}${drag?.id === p.task.id ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
-                        onPointerDown={(e) => startDrag(e, p.task.id)}
-                        title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(p.startMin + p.task.mins)} (drag to move)`}
-                        style={{
-                          ['--c' as string]: groupColors[groupOf(p.task)],
-                          minHeight: minHeightFor(p.startMin, p.startMin + p.task.mins, xRange(share)),
-                          top: pct(p.startMin),
-                          height: `calc(${pct(p.startMin + p.task.mins)} - ${pct(p.startMin)} - 2px)`,
-                          left: floating ? '2px' : `calc(${(share.lane / share.lanes) * 100}% + 2px)`,
-                          width: floating ? 'calc(100% - 4px)' : `calc(${100 / share.lanes}% - 4px)`,
-                        }}
-                      >
-                        <div className="t">{p.task.title}</div>
-                        <div className="m">
-                          {p.forced ? '⚠ overlaps · ' : ''}
-                          {hhmm(p.startMin)} · {formatDuration(p.task.mins)}
-                        </div>
-                      </div>
-                      )
-                    })}
-                  {earlier.length > 0 && (
-                    <div
-                      className="edge top"
-                      title={`Before ${hhmm(START_HOUR * 60)}: ${earlier.map((s) => s.occ.title).join(', ')}`}
-                      aria-label={`${earlier.length} earlier event${earlier.length > 1 ? 's' : ''}: ${earlier.map((s) => s.occ.title).join(', ')}`}
-                    >
-                      ↑ {earlier.length}
-                    </div>
-                  )}
-                  {later.length > 0 && (
-                    <div
-                      className="edge bottom"
-                      title={`After ${hhmm(END_HOUR * 60)}: ${later.map((s) => s.occ.title).join(', ')}`}
-                      aria-label={`${later.length} later event${later.length > 1 ? 's' : ''}: ${later.map((s) => s.occ.title).join(', ')}`}
-                    >
-                      ↓ {later.length}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+            {DAY_SHORT.map((name, i) => (
+              <DayColumn
+                key={name}
+                colRef={(el) => {
+                  colRefs.current[i] = el
+                }}
+                index={i}
+                day={weekStart + i}
+                isToday={weekStart + i === today}
+                hourCount={hours.length}
+                segments={segments}
+                shown={shown}
+                drag={drag}
+                clashing={clashing}
+                colors={colors}
+                groupColors={groupColors}
+                highlightId={highlightId}
+                pxPerMin={pxPerMin}
+                onTaskDown={startDrag}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -444,7 +498,7 @@ export default function WeekCalendar({
           </span>
         ))}
         {/* The two task groups differ by shape as well as colour: dashed + dot, and dotted + diamond. */}
-        {(['daily', 'weekly'] as const).map((g) => (
+        {GROUPS.map((g) => (
           <span key={g}>
             <i className={`dot${g === 'weekly' ? ' diamond' : ''}`} style={{ ['--c' as string]: groupColors[g] }} />
             {GROUP_LABEL[g]} tasks

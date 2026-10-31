@@ -25,7 +25,8 @@ describe('tasks', () => {
     const before = addTask([], { title: 'a', mins: 30, day: 1 })
     const { id } = before[0]
     expect(setTaskMins(before, id, 90)[0].mins).toBe(90)
-    expect(setTaskMins([{ ...before[0], slot: { day: 1, startMin: 600 } }], id, 90)[0].slot).toBeUndefined()
+    expect(setTaskMins([{ ...before[0], slot: { day: 1, startMin: 600 } }], id, 90)[0].slot).toEqual({ day: 1, startMin: 600 })
+    expect(setTaskMins([{ ...before[0], slot: { day: 1, startMin: 600, forced: true } }], id, 90)[0].slot).toBeUndefined()
     expect(removeTask(before, id)).toEqual([])
     expect(before[0]).toMatchObject({ mins: 30 })
   })

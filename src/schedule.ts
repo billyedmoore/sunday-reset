@@ -14,6 +14,8 @@ export interface Placement {
   /** 0 = Monday … 6 = Sunday. */
   day: number
   startMin: number
+  /** The user chose to overlap something here. */
+  forced?: boolean
 }
 
 export interface ScheduleResult {
@@ -58,21 +60,45 @@ function shuffled<T>(items: T[], rand: () => number): T[] {
   return out
 }
 
+export const DAY_START = 6 * 60
+export const DAY_END = 22 * 60
+
+const overlaps = (list: Busy[], s: number, mins: number, gap: number) =>
+  list.some((b) => s < b.end + gap && s + mins + gap > b.start)
+
+/**
+ * Whether a task of `mins` minutes may sit at `startMin` on `day`: inside the 06:00–22:00 window and not
+ * overlapping any event or any other placed task. Used to validate drags.
+ */
+export function slotFree(
+  busy: Busy[][],
+  placements: Placement[],
+  taskId: string,
+  day: number,
+  startMin: number,
+  mins: number,
+): boolean {
+  if (day < 0 || day > 6 || startMin < DAY_START || startMin + mins > DAY_END) return false
+  const others = placements
+    .filter((p) => p.day === day && p.task.id !== taskId)
+    .map((p) => ({ start: p.startMin, end: p.startMin + p.task.mins }))
+  return !overlaps([...busy[day], ...others], startMin, mins, 0)
+}
+
 /**
  * Randomly place tasks into the free gaps of the week.
  * Tasks that already have a valid `slot` keep it; the rest are placed around them. Tasks pinned to a
  * day stay on that day; "any time" tasks go on any day, favouring the quieter ones.
  */
 export function scheduleTasks(tasks: Task[], opts: ScheduleOptions): ScheduleResult {
-  const { busy, seed, dayStart = 6 * 60, dayEnd = 22 * 60, step = 15, gap = 15, firstDay = 0 } = opts
+  const { busy, seed, dayStart = DAY_START, dayEnd = DAY_END, step = 15, gap = 15, firstDay = 0 } = opts
   const rand = mulberry32(seed)
   const taken: Busy[][] = busy.map((day) => [...day])
   const load = new Array<number>(7).fill(0)
   const placements: Placement[] = []
   const unplaced: Task[] = []
 
-  const isFree = (day: number, s: number, mins: number) =>
-    !taken[day].some((b) => s < b.end + gap && s + mins + gap > b.start)
+  const isFree = (day: number, s: number, mins: number) => !overlaps(taken[day], s, mins, gap)
 
   const freeStarts = (day: number, mins: number): number[] => {
     const starts: number[] = []
@@ -89,24 +115,38 @@ export function scheduleTasks(tasks: Task[], opts: ScheduleOptions): ScheduleRes
     placements.push({ task, day, startMin })
   }
 
-  // Keep slots that are still valid (right day, inside the window, clear of events); re-place the rest.
+  // Keep slots that are still valid (right day, inside the window, not overlapping anything); re-place
+  // the rest. Kept slots need no gap, so a task the user dragged right up to an event stays put.
+  // Slots the user forced onto a conflict are kept too, and are handled last so they never push a
+  // normal slot out of the way.
   const toPlace: Task[] = []
-  for (const task of tasks) {
-    const slot = task.slot
-    if (
-      slot &&
-      (task.day === null || task.day === slot.day) &&
-      slot.startMin >= dayStart &&
-      slot.startMin + task.mins <= dayEnd &&
-      isFree(slot.day, slot.startMin, task.mins)
-    ) {
-      taken[slot.day].push({ start: slot.startMin, end: slot.startMin + task.mins })
-      load[slot.day] += task.mins
-      placements.push({ task, day: slot.day, startMin: slot.startMin })
-    } else {
-      toPlace.push(task)
+  const inRange = (t: Task) =>
+    t.slot !== undefined &&
+    t.slot.day >= 0 &&
+    t.slot.day <= 6 &&
+    (t.day === null || t.day === t.slot.day) &&
+    t.slot.startMin >= dayStart &&
+    t.slot.startMin + t.mins <= dayEnd
+  const keep = (task: Task, forced: boolean) => {
+    const { day, startMin } = task.slot!
+    taken[day].push({ start: startMin, end: startMin + task.mins })
+    load[day] += task.mins
+    placements.push({ task, day, startMin, ...(forced ? { forced: true } : {}) })
+  }
+  for (const forcedPass of [false, true]) {
+    for (const task of tasks) {
+      if (!task.slot || Boolean(task.slot.forced) !== forcedPass) continue
+      if (!inRange(task)) {
+        toPlace.push(task)
+        continue
+      }
+      const clash = overlaps(taken[task.slot.day], task.slot.startMin, task.mins, 0)
+      if (!clash) keep(task, false)
+      else if (forcedPass) keep(task, true)
+      else toPlace.push(task)
     }
   }
+  for (const task of tasks) if (!task.slot) toPlace.push(task)
 
   for (const task of shuffled(toPlace.filter((t) => t.day !== null), rand)) {
     const starts = freeStarts(task.day!, task.mins)
@@ -152,9 +192,20 @@ export function busyByDay(events: StoredEvent[], weekStart: number): Busy[][] {
 
 /** Run the scheduler and store each task's slot on the task (tasks that don't fit lose theirs). */
 export function autoPlace(tasks: Task[], opts: ScheduleOptions): Task[] {
-  const slots = new Map(scheduleTasks(tasks, opts).placements.map((p) => [p.task.id, { day: p.day, startMin: p.startMin }]))
+  const slots = new Map(
+    scheduleTasks(tasks, opts).placements.map((p) => [
+      p.task.id,
+      { day: p.day, startMin: p.startMin, ...(p.forced ? { forced: true } : {}) },
+    ]),
+  )
   return tasks.map((t) => ({ ...t, slot: slots.get(t.id) }))
 }
+
+/** The tasks that currently have a place on the calendar, with their forced flag carried across. */
+export const placementsOf = (tasks: Task[]): Placement[] =>
+  tasks.flatMap((t) =>
+    t.slot ? [{ task: t, day: t.slot.day, startMin: t.slot.startMin, ...(t.slot.forced ? { forced: true } : {}) }] : [],
+  )
 
 /** Forget every slot, so the next `autoPlace` re-rolls the whole week. */
 export const clearSlots = (tasks: Task[]): Task[] => tasks.map((t) => ({ ...t, slot: undefined }))

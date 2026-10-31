@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { dayNum } from './ical/dates'
 import { parseIcs } from './ical/parse'
-import { autoPlace, busyByDay, clearSlots, scheduleTasks, type Busy } from './schedule'
+import { autoPlace, busyByDay, clearSlots, placementsOf, scheduleTasks, slotFree, type Busy, type Placement } from './schedule'
 import type { Task } from './tasks'
 
 const task = (id: string, mins: number, day: number | null): Task => ({ id, title: id, mins, day })
@@ -110,6 +110,102 @@ describe('autoPlace', () => {
     const a = autoPlace(many, opts(1))
     const b = autoPlace(clearSlots(a), opts(2))
     expect(b.map((t) => t.slot)).not.toEqual(a.map((t) => t.slot))
+  })
+})
+
+describe('slotFree (validating a drag)', () => {
+  const busy = empty()
+  busy[2] = [{ start: 10 * 60, end: 11 * 60 }]
+  const other: Placement = { task: task('other', 60, null), day: 2, startMin: 14 * 60 }
+  const free = (day: number, start: number, mins = 60) => slotFree(busy, [other], 'me', day, start, mins)
+
+  it('allows free time, including right up against events and tasks', () => {
+    expect(free(2, 9 * 60)).toBe(true) // ends exactly as the 10:00 event starts
+    expect(free(2, 11 * 60)).toBe(true) // starts exactly as it ends
+    expect(free(2, 15 * 60)).toBe(true) // directly after the other task
+    expect(free(3, 10 * 60)).toBe(true) // same time, different day
+  })
+
+  it('refuses overlaps with events or other tasks', () => {
+    expect(free(2, 9 * 60 + 30)).toBe(false)
+    expect(free(2, 10 * 60 + 30)).toBe(false)
+    expect(free(2, 13 * 60 + 30)).toBe(false)
+  })
+
+  it('ignores the task being moved, so it can nudge along its own old spot', () => {
+    expect(slotFree(busy, [other], 'other', 2, 14 * 60 + 15, 60)).toBe(true)
+  })
+
+  it('refuses anything outside the 06:00-22:00 window or the week', () => {
+    expect(free(1, 5 * 60 + 45)).toBe(false)
+    expect(free(1, 21 * 60 + 30)).toBe(false)
+    expect(free(1, 21 * 60)).toBe(true)
+    expect(free(7, 9 * 60)).toBe(false)
+    expect(free(-1, 9 * 60)).toBe(false)
+  })
+
+  it('keeps a task dragged right next to an event when the week is re-checked', () => {
+    const dragged: Task = { ...task('a', 60, null), slot: { day: 2, startMin: 11 * 60 } } // no gap
+    expect(autoPlace([dragged], { busy, seed: 1 })[0].slot).toEqual({ day: 2, startMin: 11 * 60 })
+  })
+})
+
+describe('forced slots (user said "put it there anyway")', () => {
+  const busy = empty()
+  busy[2] = [{ start: 10 * 60, end: 11 * 60 }]
+  const forcedTask = (id = 'f'): Task => ({ ...task(id, 60, null), slot: { day: 2, startMin: 10 * 60, forced: true } })
+
+  it('keeps a forced slot even though it overlaps an event, and marks it', () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const r = scheduleTasks([forcedTask()], { busy, seed })
+      expect(r.placements).toHaveLength(1)
+      expect(r.placements[0]).toMatchObject({ day: 2, startMin: 600, forced: true })
+    }
+    expect(autoPlace([forcedTask()], { busy, seed: 1 })[0].slot).toEqual({ day: 2, startMin: 600, forced: true })
+  })
+
+  it('moves an ordinary clashing slot but not a forced one', () => {
+    const ordinary: Task = { ...task('o', 60, null), slot: { day: 2, startMin: 10 * 60 } }
+    const [o, f] = autoPlace([ordinary, forcedTask()], { busy, seed: 3 })
+    expect(f.slot).toEqual({ day: 2, startMin: 600, forced: true })
+    expect(o.slot).not.toEqual(ordinary.slot)
+  })
+
+  it('never lets a forced slot push a valid ordinary slot out of the way', () => {
+    // The ordinary task is processed after the forced one in list order, and must still stay put.
+    const ordinary: Task = { ...task('o', 60, null), slot: { day: 2, startMin: 12 * 60 } }
+    const forcedOnOrdinary: Task = { ...task('f', 60, null), slot: { day: 2, startMin: 12 * 60 + 30, forced: true } }
+    const [f, o] = autoPlace([forcedOnOrdinary, ordinary], { busy: empty(), seed: 4 })
+    expect(o.slot).toEqual({ day: 2, startMin: 12 * 60 })
+    expect(f.slot).toEqual({ day: 2, startMin: 12 * 60 + 30, forced: true })
+  })
+
+  it('drops the forced flag once the clash has gone away', () => {
+    const [t] = autoPlace([forcedTask()], { busy: empty(), seed: 1 })
+    expect(t.slot).toEqual({ day: 2, startMin: 600 })
+  })
+
+  it('does not place new tasks on top of a forced one', () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const out = autoPlace([forcedTask(), task('new', 60, 2)], { busy, seed })
+      const s = out[1].slot!
+      expect(s.startMin + 60 + 15 <= 600 || s.startMin >= 660 + 15).toBe(true)
+    }
+  })
+})
+
+describe('placementsOf', () => {
+  it('lists placed tasks and carries the forced flag through to the calendar', () => {
+    const tasks: Task[] = [
+      { ...task('normal', 30, null), slot: { day: 1, startMin: 600 } },
+      { ...task('forced', 30, null), slot: { day: 1, startMin: 610, forced: true } },
+      task('unplaced', 30, null),
+    ]
+    const out = placementsOf(tasks)
+    expect(out.map((p) => [p.task.id, p.day, p.startMin, p.forced])).toEqual([
+      ['normal', 1, 600, undefined],
+      ['forced', 1, 610, true],
+    ])
   })
 })
 

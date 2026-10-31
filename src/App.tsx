@@ -4,11 +4,12 @@ import WeekCalendar from './components/WeekCalendar'
 import { londonDay, upcomingMonday } from './ical/dates'
 import { importCalendarFile } from './ical/import'
 import type { StoredEvent } from './ical/parse'
-import { autoPlace, busyByDay, clearSlots, type Placement, type ScheduleOptions } from './schedule'
+import { autoPlace, busyByDay, clearSlots, placementsOf, type ScheduleOptions } from './schedule'
 import { loadEvents, saveEvents } from './store'
 import {
   addTask,
   loadTasks,
+  moveTask,
   removeTask,
   saveTasks,
   setTaskMins,
@@ -61,10 +62,8 @@ export default function App() {
     setTasksByWeek((all) => placeWeek(all, start, opts))
   }
 
-  const placements = useMemo<Placement[]>(
-    () => tasks.filter((t) => t.slot).map((t) => ({ task: t, day: t.slot!.day, startMin: t.slot!.startMin })),
-    [tasks],
-  )
+  const busyTimes = useMemo(() => busyByDay(events, weekStart), [events, weekStart])
+  const placements = useMemo(() => placementsOf(tasks), [tasks])
   const unplaced = useMemo(() => tasks.filter((t) => !t.slot), [tasks])
 
   async function handleFile(file: File | undefined) {
@@ -129,6 +128,8 @@ export default function App() {
               onImport={pick}
               placements={placements}
               unplaced={unplaced}
+              busy={busyTimes}
+              onMoveTask={(id, day, startMin, forced) => editTasks((t) => moveTask(t, id, day, startMin, forced))}
               canShuffle={tasks.length > 0}
               onShuffle={() => {
                 const opts = placeOpts()

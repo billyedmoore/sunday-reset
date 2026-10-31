@@ -215,10 +215,10 @@ export const placementsOf = (tasks: Task[]): Placement[] =>
 
 /**
  * Forget the slots of tasks the user hasn't moved themselves, so the next `autoPlace` re-rolls those.
- * Tasks they dragged, nudged or placed by hand keep their spot.
+ * Tasks they dragged, nudged or placed by hand keep their spot, unless `includeManual` is set.
  */
-export const clearSlots = (tasks: Task[]): Task[] =>
-  tasks.map((t) => (t.slot?.manual ? t : { ...t, slot: undefined }))
+export const clearSlots = (tasks: Task[], includeManual = false): Task[] =>
+  tasks.map((t) => (t.slot?.manual && !includeManual ? t : { ...t, slot: undefined }))
 
 const overlapMins = (a: Busy, startMin: number, endMin: number) =>
   Math.max(0, Math.min(a.end, endMin) - Math.max(a.start, startMin))

@@ -141,7 +141,7 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
         </header>
 
         {unplaced.length > 0 && (
-          <p className="error">
+          <p className="notice">
             Not on the calendar, so not exported: {unplaced.map((t) => t.title).join(', ')}.
           </p>
         )}

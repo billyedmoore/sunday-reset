@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import ExportDialog from './components/ExportDialog'
+import ErrorPopup from './components/ErrorPopup'
 import TaskList, { type PlacedNotice } from './components/TaskList'
 import WeekCalendar from './components/WeekCalendar'
 import { DAY_FULL, hhmm } from './format'
@@ -58,6 +59,7 @@ export default function App() {
     placeWeek(loadTasks(), weekStart, scheduleOpts(events, weekStart, today)),
   )
   const [error, setError] = useState('')
+  const [shuffleAsk, setShuffleAsk] = useState('')
   const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -117,6 +119,11 @@ export default function App() {
     if (index < 0) return
     setUndo({ task: tasks[index], index, week: weekStart })
     editTasks((t) => removeTask(t, id))
+  }
+
+  function shuffle(includeManual = false) {
+    const opts = placeOpts()
+    editTasks((t) => autoPlace(clearSlots(t, includeManual), opts))
   }
 
   function onUndo() {
@@ -224,8 +231,9 @@ export default function App() {
               highlightId={highlightId}
               canShuffle={tasks.length > 0}
               onShuffle={() => {
-                const opts = placeOpts()
-                editTasks((t) => autoPlace(clearSlots(t), opts))
+                const kept = tasks.filter((t) => t.slot?.manual).map((t) => t.title)
+                if (kept.length) setShuffleAsk(`Shuffling will also move ${kept.join(', ')}, which you placed by hand.`)
+                else shuffle()
               }}
             />
           ) : (
@@ -236,7 +244,18 @@ export default function App() {
               <p className="hint">Choose a Google Calendar export (.zip) or an .ics file, or drop it here.</p>
             </div>
           )}
-          {error && <p className="error">{error}</p>}
+          {shuffleAsk && (
+            <ErrorPopup
+              message={shuffleAsk}
+              confirmLabel="Continue"
+              onClose={() => setShuffleAsk('')}
+              onConfirm={() => {
+                setShuffleAsk('')
+                shuffle(true)
+              }}
+            />
+          )}
+          {error && <ErrorPopup message={error} onClose={() => setError('')} />}
           <input
             ref={fileInput}
             type="file"

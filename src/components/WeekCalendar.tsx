@@ -235,6 +235,67 @@ function DayColumn({
   )
 }
 
+/** A light box floating over the calendar that offers the import, with a "?" popover on getting the file. */
+function ImportIntro({ importing, onImport, onClose }: { importing: boolean; onImport: () => void; onClose: () => void }) {
+  const [help, setHelp] = useState(false)
+
+  // Escape closes the help first, then the box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (help) setHelp(false)
+      else onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [help, onClose])
+
+  return (
+    <div className="import-intro" role="dialog" aria-label="Import your calendar">
+      <button className="x" aria-label="Close" onClick={onClose}>
+        ×
+      </button>
+      <h3>Plan around your events</h3>
+      <p>Import a calendar and tasks will be placed in the gaps. Without one, they can go anywhere in the week.</p>
+      <div className="import-actions">
+        <button className="btn small" onClick={onImport} disabled={importing} autoFocus>
+          {importing ? 'Importing…' : 'Import calendar'}
+        </button>
+        <button
+          className="btn small ghost"
+          onClick={() => setHelp((h) => !h)}
+          aria-expanded={help}
+          aria-controls="import-help"
+          title="How to get a calendar file to import"
+        >
+          How?
+        </button>
+        <button className="btn small ghost" onClick={onClose}>
+          Not now
+        </button>
+      </div>
+      <p className="hint">Choose a Google Calendar export (.zip) or an .ics file, or drop it anywhere on the page.</p>
+      {help && (
+        <div className="import-help" id="import-help">
+          <h4>From Google Calendar</h4>
+          <ol>
+            <li>
+              Open Google Calendar on a computer and go to <b>Settings (gear) → Import &amp; export → Export</b>.
+            </li>
+            <li>
+              It downloads a <b>.zip</b> with one file per calendar. Leave it zipped and choose it here.
+            </li>
+          </ol>
+          <p className="hint">
+            Any other calendar app that exports an <b>.ics</b> file works too. The file is read in your browser and kept
+            only on this device.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function WeekCalendar({
   events,
   weekStart,
@@ -259,6 +320,9 @@ export default function WeekCalendar({
     () => splitByDay(eventsBetween(events, midnightOf(weekStart), midnightOf(weekStart + 7)), weekStart, 7),
     [events, weekStart],
   )
+
+  // The import box can be closed to use the app without a calendar; it comes back on the next visit.
+  const [introClosed, setIntroClosed] = useState(false)
 
   const colRefs = useRef<(HTMLDivElement | null)[]>([])
   // How tall the day columns are on screen, so a block's drawn size (and the side-by-side layout that
@@ -446,19 +510,15 @@ export default function WeekCalendar({
         >
           Export
         </button>
-        <button className="btn small ghost" onClick={onImport} disabled={importing}>
+        <button
+          className="btn small ghost"
+          onClick={onImport}
+          disabled={importing}
+          title={events.length ? undefined : 'Without a calendar, tasks are placed anywhere in the week'}
+        >
           {importing ? 'Importing…' : events.length ? 'Re-import' : 'Import calendar'}
         </button>
       </div>
-      {events.length === 0 && (
-        <p className="notice">
-          No calendar imported yet, so tasks are placed anywhere in the week. Choose a Google Calendar export (.zip) or an
-          .ics file, or drop it here, to plan around your events.{' '}
-          <button className="btn small" onClick={onImport} disabled={importing}>
-            {importing ? 'Importing…' : 'Import calendar'}
-          </button>
-        </p>
-      )}
       {unplaced.length > 0 && (
         <p className="notice">
           {unplaced.length === 1 ? "1 task doesn't" : `${unplaced.length} tasks don't`} fit: {unplaced.map((t) => t.title).join(', ')}. Open{' '}
@@ -466,6 +526,7 @@ export default function WeekCalendar({
         </p>
       )}
 
+      <div className="cal-stage">
       <div className="cal-scroll">
         <div className="cal">
           <div className="row">
@@ -513,6 +574,10 @@ export default function WeekCalendar({
             ))}
           </div>
         </div>
+      </div>
+      {events.length === 0 && !introClosed && (
+        <ImportIntro importing={importing} onImport={onImport} onClose={() => setIntroClosed(true)} />
+      )}
       </div>
 
       {pending && (

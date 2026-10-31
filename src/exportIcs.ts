@@ -1,3 +1,4 @@
+import { pad } from './format'
 import { fromDayNum, wallToInstant } from './ical/dates'
 import { GROUP_LABEL, groupOf, type Group } from './settings'
 import { formatDuration, type Task } from './tasks'
@@ -95,6 +96,5 @@ export function buildIcs(tasks: Task[], o: IcsOptions): string {
 
 export function icsFilename(group: Group, weekStart: number): string {
   const { y, m, d } = fromDayNum(weekStart)
-  const pad = (n: number) => String(n).padStart(2, '0')
   return `sunday-reset-${GROUP_LABEL[group].toLowerCase().replace(/ /g, '-')}-${y}-${pad(m)}-${pad(d)}.ics`
 }

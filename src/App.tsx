@@ -1,20 +1,37 @@
-import { useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import TaskList from './components/TaskList'
 import WeekCalendar from './components/WeekCalendar'
 import { londonDay, upcomingMonday } from './ical/dates'
 import { importCalendarFile } from './ical/import'
 import type { StoredEvent } from './ical/parse'
 import { loadEvents, saveEvents } from './store'
+import {
+  addTask,
+  loadTasks,
+  removeTask,
+  saveTasks,
+  setTaskMins,
+  type Task,
+  type TasksByWeek,
+} from './tasks'
 
 export default function App() {
   const [events, setEvents] = useState<StoredEvent[]>(loadEvents)
   // The app is for planning ahead, so it opens on the upcoming Mon–Sun week.
   const [weekStart, setWeekStart] = useState(() => upcomingMonday(Date.now()))
+  const [tasksByWeek, setTasksByWeek] = useState<TasksByWeek>(loadTasks)
   const [today] = useState(() => londonDay(Date.now()))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [dragging, setDragging] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  useEffect(() => saveTasks(tasksByWeek), [tasksByWeek])
+
+  // The lists belong to whichever week the calendar is showing.
+  const tasks = tasksByWeek[weekStart] ?? []
+  const editTasks = (fn: (tasks: Task[]) => Task[]) =>
+    setTasksByWeek((all) => ({ ...all, [weekStart]: fn(all[weekStart] ?? []) }))
 
   async function handleFile(file: File | undefined) {
     if (!file) return
@@ -43,7 +60,14 @@ export default function App() {
     <div className="app">
       <h1>Sunday Reset</h1>
       <div className="layout">
-        <TaskList />
+        <TaskList
+          today={today}
+          weekStart={weekStart}
+          tasks={tasks}
+          onAdd={(day, title, mins) => editTasks((t) => addTask(t, { title, mins, day }))}
+          onRemove={(id) => editTasks((t) => removeTask(t, id))}
+          onSetMins={(id, mins) => editTasks((t) => setTaskMins(t, id, mins))}
+        />
         <section
           className={`panel${dragging ? ' dragging' : ''}`}
           onDragOver={(e) => {

@@ -1,10 +1,121 @@
-// Placeholder boxes for the week's to-dos; entry and drag-to-calendar come in a later step.
-export default function TaskList() {
+import { useState, type FormEvent } from 'react'
+import { fromDayNum } from '../ical/dates'
+import { DEFAULT_MINS, DURATIONS, formatDuration, tasksFor, totalMins, type Task } from '../tasks'
+
+const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+interface Handlers {
+  onAdd: (day: number | null, title: string, mins: number) => void
+  onRemove: (id: string) => void
+  onSetMins: (id: string, mins: number) => void
+}
+
+function DurationSelect({ value, onChange, label }: { value: number; onChange: (m: number) => void; label: string }) {
+  const options = DURATIONS.includes(value) ? DURATIONS : [...DURATIONS, value].sort((a, b) => a - b)
+  return (
+    <select className="dur" value={value} aria-label={label} onChange={(e) => onChange(Number(e.target.value))}>
+      {options.map((m) => (
+        <option key={m} value={m}>
+          {formatDuration(m)}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function AddRow({ label, onAdd }: { label: string; onAdd: (title: string, mins: number) => void }) {
+  const [title, setTitle] = useState('')
+  const [mins, setMins] = useState(DEFAULT_MINS)
+
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!title.trim()) return
+    onAdd(title, mins)
+    setTitle('')
+  }
+
+  return (
+    <form className="add-row" onSubmit={submit}>
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Add a task…" aria-label={`New task: ${label}`} />
+      <DurationSelect value={mins} onChange={setMins} label="How long it will take" />
+      <button className="btn small" type="submit" aria-label={`Add task: ${label}`}>
+        +
+      </button>
+    </form>
+  )
+}
+
+interface CardProps extends Handlers {
+  variant: 'day' | 'general'
+  title: string
+  note: string
+  day: number | null
+  tasks: Task[]
+}
+
+function TaskCard({ variant, title, note, day, tasks, onAdd, onRemove, onSetMins }: CardProps) {
+  const mine = tasksFor(tasks, day)
+  return (
+    <section className={`task-card ${variant}`}>
+      <header>
+        <h3>{title}</h3>
+        <span className="note">{mine.length ? `${note} · ${formatDuration(totalMins(mine))}` : note}</span>
+      </header>
+      <ul>
+        {mine.length === 0 && <li className="empty">Nothing planned yet</li>}
+        {mine.map((t) => (
+          <li key={t.id}>
+            <span className="title">{t.title}</span>
+            <DurationSelect value={t.mins} onChange={(m) => onSetMins(t.id, m)} label={`Time for ${t.title}`} />
+            <button className="x" onClick={() => onRemove(t.id)} aria-label={`Delete ${t.title}`}>
+              ×
+            </button>
+          </li>
+        ))}
+      </ul>
+      <AddRow label={title} onAdd={(text, mins) => onAdd(day, text, mins)} />
+    </section>
+  )
+}
+
+interface Props extends Handlers {
+  /** London day number of the displayed week's Monday. */
+  weekStart: number
+  /** London day number of today, to start on today's tab when it's in the shown week. */
+  today: number
+  tasks: Task[]
+}
+
+export default function TaskList({ weekStart, today, tasks, ...handlers }: Props) {
+  const [selected, setSelected] = useState(() => (today >= weekStart && today < weekStart + 7 ? today - weekStart : 0))
+  const { d, m } = fromDayNum(weekStart + selected)
+
   return (
     <div className="tasks" aria-label="Things to do this week">
-      {[0, 1, 2, 3, 4].map((i) => (
-        <div key={i} className="task-box" />
-      ))}
+      <div className="day-tabs" role="tablist" aria-label="Day of the week">
+        {DAY_SHORT.map((name, i) => {
+          const count = tasksFor(tasks, i).length
+          const date = fromDayNum(weekStart + i).d
+          return (
+            <button
+              key={name}
+              role="tab"
+              aria-selected={i === selected}
+              className={`day-tab${i === selected ? ' selected' : ''}${weekStart + i === today ? ' today' : ''}`}
+              onClick={() => setSelected(i)}
+            >
+              {name}
+              <b>{date}</b>
+              <span className="count">{count ? `${count} task${count > 1 ? 's' : ''}` : ''}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <TaskCard variant="day" title={DAY_FULL[selected]} note={`${d} ${MONTHS[m - 1]}`} day={selected} tasks={tasks} {...handlers} />
+      <TaskCard variant="general" title="Any time this week" note="No set day" day={null} tasks={tasks} {...handlers} />
     </div>
   )
 }

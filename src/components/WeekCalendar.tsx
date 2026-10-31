@@ -3,6 +3,8 @@ import { calendarColors } from '../colors'
 import { fromDayNum, midnightOf } from '../ical/dates'
 import { eventsBetween, splitByDay, type Segment } from '../ical/expand'
 import type { StoredEvent } from '../ical/parse'
+import type { Placement } from '../schedule'
+import { formatDuration, type Task } from '../tasks'
 
 const START_HOUR = 6
 const END_HOUR = 22
@@ -42,9 +44,25 @@ interface Props {
   onShift: (weeks: number) => void
   onToday: () => void
   onImport: () => void
+  /** Tasks placed into free time. These are shown here only, not written to any calendar. */
+  placements: Placement[]
+  unplaced: Task[]
+  canShuffle: boolean
+  onShuffle: () => void
 }
 
-export default function WeekCalendar({ events, weekStart, today, onShift, onToday, onImport }: Props) {
+export default function WeekCalendar({
+  events,
+  weekStart,
+  today,
+  onShift,
+  onToday,
+  onImport,
+  placements,
+  unplaced,
+  canShuffle,
+  onShuffle,
+}: Props) {
   const colors = useMemo(() => calendarColors(events), [events])
   const segments = useMemo(
     () => splitByDay(eventsBetween(events, midnightOf(weekStart), midnightOf(weekStart + 7)), weekStart, 7),
@@ -70,8 +88,20 @@ export default function WeekCalendar({ events, weekStart, today, onShift, onToda
         <button className="btn small ghost" onClick={() => onShift(1)} aria-label="Next week">›</button>
         <button className="btn small ghost" onClick={onToday}>Upcoming week</button>
         <h2 className="cal-title">{title}</h2>
-        <button className="btn small" onClick={onImport}>Re-import</button>
+        <button
+          className="btn small dice"
+          onClick={onShuffle}
+          disabled={!canShuffle}
+          title="Shuffle tasks into different free slots"
+          aria-label="Shuffle tasks"
+        >
+          🎲
+        </button>
+        <button className="btn small ghost" onClick={onImport}>Re-import</button>
       </div>
+      {unplaced.length > 0 && (
+        <p className="error">Couldn't fit: {unplaced.map((t) => `${t.title} (${formatDuration(t.mins)})`).join(', ')}</p>
+      )}
 
       <div className="cal-scroll">
         <div className="cal">
@@ -138,6 +168,26 @@ export default function WeekCalendar({ events, weekStart, today, onShift, onToda
                       <div className="m">{timeLabel(seg)}</div>
                     </div>
                   ))}
+                  {placements
+                    .filter((p) => p.day === i)
+                    .map((p) => (
+                      <div
+                        key={p.task.id}
+                        className="chip timed task-chip"
+                        title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(p.startMin + p.task.mins)}`}
+                        style={{
+                          top: pct(p.startMin),
+                          height: `calc(${pct(p.startMin + p.task.mins)} - ${pct(p.startMin)} - 2px)`,
+                          left: '2px',
+                          width: 'calc(100% - 4px)',
+                        }}
+                      >
+                        <div className="t">{p.task.title}</div>
+                        <div className="m">
+                          {hhmm(p.startMin)} · {formatDuration(p.task.mins)}
+                        </div>
+                      </div>
+                    ))}
                 </div>
               )
             })}

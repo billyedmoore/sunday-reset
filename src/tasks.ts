@@ -4,6 +4,8 @@ export interface Task {
   title: string
   mins: number
   day: number | null
+  /** Where the task sits on the calendar once placed (day 0 = Monday, minutes from midnight). */
+  slot?: { day: number; startMin: number }
 }
 
 /** Tasks keyed by the London day number of the week's Monday. */
@@ -27,7 +29,7 @@ export const addTask = (tasks: Task[], t: { title: string; mins: number; day: nu
 export const removeTask = (tasks: Task[], id: string): Task[] => tasks.filter((t) => t.id !== id)
 
 export const setTaskMins = (tasks: Task[], id: string, mins: number): Task[] =>
-  tasks.map((t) => (t.id === id ? { ...t, mins } : t))
+  tasks.map((t) => (t.id === id ? { ...t, mins, slot: undefined } : t)) // a new length needs a new slot
 
 export const tasksFor = (tasks: Task[], day: number | null): Task[] => tasks.filter((t) => t.day === day)
 

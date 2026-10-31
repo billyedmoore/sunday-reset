@@ -283,6 +283,17 @@ h1 {
   font-size: 0.85rem;
 }
 
+.btn.dice {
+  padding: 4px 12px;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .btn.ghost {
   background: var(--surface);
   color: var(--ink);
@@ -433,6 +444,15 @@ h1 {
 
 .chip.timed {
   z-index: 1;
+}
+
+/* A task the shuffle dropped into free time: dashed rose outline so it reads as "yours, not yet booked". */
+.chip.task-chip {
+  --c: var(--accent);
+  border: 2px dashed var(--accent);
+  border-left-width: 2px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  z-index: 2;
 }
 
 .chip.before {

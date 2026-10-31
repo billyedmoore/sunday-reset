@@ -219,38 +219,6 @@ h1 {
   padding: 14px;
 }
 
-@media (max-width: 760px) {
-  .app {
-    height: auto;
-  }
-
-  .layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: none;
-  }
-
-  .task-card.day,
-  .task-card.general {
-    flex: none;
-  }
-
-  .task-card ul {
-    overflow: visible;
-  }
-
-  .cal-scroll {
-    overflow-x: auto;
-  }
-
-  .cal {
-    min-width: 640px;
-  }
-
-  .panel {
-    height: 80dvh;
-  }
-}
-
 .panel.dragging {
   outline: 3px dashed var(--accent);
   outline-offset: -8px;
@@ -930,4 +898,19 @@ h1 {
   margin: 0;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+/* ---- Screens too small for the planner ---- */
+.unsupported {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.unsupported p {
+  margin: 0;
+  font-size: 1.1rem;
 }

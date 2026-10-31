@@ -6,7 +6,7 @@ import { eventsBetween, splitByDay, type Segment } from '../ical/expand'
 import type { StoredEvent } from '../ical/parse'
 import { layoutLanes } from '../lanes'
 import { slotFree, type Busy, type Placement } from '../schedule'
-import { groupOf, type Group } from '../settings'
+import { GROUP_LABEL, groupOf, type Group } from '../settings'
 import { formatDuration, type Task } from '../tasks'
 
 const START_HOUR = 6
@@ -354,6 +354,7 @@ export default function WeekCalendar({
                       return (
                       <div
                         key={p.task.id}
+                        data-group={groupOf(p.task)}
                         className={`chip timed task-chip${isShort(p.startMin, p.startMin + p.task.mins) ? ' short' : ''}${highlightId === p.task.id ? ' pulse' : ''}${p.forced ? ' forced' : ''}${drag?.id === p.task.id ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
                         onPointerDown={(e) => startDrag(e, p.task.id)}
                         title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(p.startMin + p.task.mins)} (drag to move)`}
@@ -427,6 +428,13 @@ export default function WeekCalendar({
           <span key={c}>
             <i style={{ ['--c' as string]: colors[c] }} />
             {c}
+          </span>
+        ))}
+        {/* The two task groups differ by shape as well as colour: dashed + dot, and dotted + diamond. */}
+        {(['daily', 'weekly'] as const).map((g) => (
+          <span key={g}>
+            <i className={`dot${g === 'weekly' ? ' diamond' : ''}`} style={{ ['--c' as string]: groupColors[g] }} />
+            {GROUP_LABEL[g]} tasks
           </span>
         ))}
       </div>

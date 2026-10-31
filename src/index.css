@@ -896,3 +896,32 @@ h1 {
     animation: none;
   }
 }
+
+/* ---- Task groups differ by shape as well as colour ---- */
+/* Day to day: dashed outline and a dot. Weekly: dotted outline and a diamond. */
+.dot.diamond {
+  border-radius: 1px;
+  transform: rotate(45deg) scale(0.9);
+}
+
+.legend i.dot {
+  margin-right: 5px;
+}
+
+.chip.task-chip::after {
+  content: '●';
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--c);
+}
+
+.chip.task-chip[data-group='weekly'] {
+  border-style: dotted;
+}
+
+.chip.task-chip[data-group='weekly']::after {
+  content: '◆';
+}

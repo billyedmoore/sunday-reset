@@ -1,0 +1,315 @@
+:root {
+  --page: #fff0f5;
+  --panel: #ffd1dc;
+  --box: #f8c8dc;
+  --surface: #fff8fa;
+  --line: #f0a9c0;
+  --accent: #e75480;
+  --accent-ink: #fff;
+  --ink: #4a2a38;
+  --muted: #8a6275;
+  --today: #ffe3ec;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--page);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--page);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* The app fits the screen; the calendar scrolls inside its panel. */
+.app {
+  max-width: 1500px;
+  height: 100dvh;
+  margin: 0 auto;
+  padding: 16px 16px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(0, 2.6fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 14px;
+}
+
+/* Left: weekly to-do placeholders */
+.tasks {
+  display: grid;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
+}
+
+.task-box {
+  background: var(--box);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+/* Right: calendar panel */
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+@media (max-width: 760px) {
+  .app {
+    height: auto;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+
+  .task-box {
+    height: 56px;
+  }
+
+  .cal-scroll {
+    overflow-x: auto;
+  }
+
+  .cal {
+    min-width: 640px;
+  }
+
+  .panel {
+    height: 80dvh;
+  }
+}
+
+.panel.dragging {
+  outline: 3px dashed var(--accent);
+  outline-offset: -8px;
+}
+
+.panel-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.btn {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-weight: 600;
+}
+
+.btn:hover {
+  filter: brightness(1.06);
+}
+
+.btn.small {
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.btn.ghost {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.error {
+  margin: 0;
+  color: #a3123f;
+  font-weight: 500;
+}
+
+.cal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cal-title {
+  font-weight: 600;
+  margin: 0 auto 0 4px;
+}
+
+.cal-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* the whole week is scaled to fit; phones scroll sideways, see below */
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.cal {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 46px repeat(7, minmax(0, 1fr));
+}
+
+.dayhead {
+  padding: 8px 6px;
+  text-align: center;
+  font-size: 0.85rem;
+  border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.dayhead b {
+  display: block;
+  font-size: 1.15rem;
+}
+
+.dayhead.today {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.hours {
+  position: relative;
+}
+
+.hour-label {
+  position: absolute;
+  left: 0;
+  width: 46px;
+  padding-right: 6px;
+  text-align: right;
+  font-size: 0.65rem;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+
+.col {
+  position: relative;
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+  /* strong line each hour, fainter line each half hour (translucent so today's tint shows through) */
+  background-image:
+    linear-gradient(to bottom, transparent calc(100% - 1px), rgb(200 90 130 / 0.28) 0),
+    linear-gradient(to bottom, transparent calc(100% - 1px), rgb(200 90 130 / 0.11) 0);
+  background-size:
+    100% calc(100% / var(--n)),
+    100% calc(100% / (var(--n) * 2));
+}
+
+.col.today {
+  background-color: var(--today);
+}
+
+.chip {
+  --c: var(--accent);
+  border-left: 4px solid var(--c);
+  background: color-mix(in srgb, var(--c) 18%, var(--surface));
+  border-radius: 5px;
+  padding: 2px 5px;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  overflow: hidden;
+  margin-bottom: 3px;
+}
+
+.chip .t {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.chip .m {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.chip.timed {
+  position: absolute;
+  margin: 0;
+  min-height: 18px;
+}
+
+/* Whole-day events block off the full column; timed events sit on top. */
+.chip.block {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  margin: 0;
+  background: color-mix(in srgb, var(--c) 28%, var(--surface));
+  z-index: 0;
+}
+
+.chip.timed {
+  z-index: 1;
+}
+
+.chip.before {
+  border-top-left-radius: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--c);
+  margin-right: 5px;
+}

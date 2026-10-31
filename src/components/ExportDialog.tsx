@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { downloadText } from '../download'
 import { buildIcs, exportableTasks, icsFilename } from '../exportIcs'
-import { DAY_SHORT, MONTHS, pad } from '../format'
+import { DAY_SHORT, MONTHS, hhmm } from '../format'
 import { fromDayNum } from '../ical/dates'
-import { GROUP_LABEL, type Group, type Settings } from '../settings'
+import { GROUPS, GROUP_LABEL, type Group, type Settings } from '../settings'
 import { formatDuration, totalMins, type Task } from '../tasks'
 
 const REMINDERS = [0, 5, 10, 15, 30, 60]
 
+const GROUP_NOTE: Record<Group, string> = {
+  daily: 'Tasks you gave a day',
+  weekly: 'Tasks for any time this week',
+}
 
 interface Props {
   open: boolean
@@ -58,7 +62,7 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
         <div>
           <h3>{GROUP_LABEL[group]}</h3>
           <span className="note">
-            {group === 'daily' ? 'Tasks you gave a day' : 'Tasks for any time this week'}
+            {GROUP_NOTE[group]}
           </span>
         </div>
       </div>
@@ -78,7 +82,7 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
             return (
               <li key={t.id}>
                 <span className="when">
-                  {DAY_SHORT[t.slot!.day]} {d} {MONTHS[m - 1]} · {pad(Math.floor(s / 60))}:{pad(s % 60)}
+                  {DAY_SHORT[t.slot!.day]} {d} {MONTHS[m - 1]} · {hhmm(s)}
                 </span>
                 <span className="what">{t.title}</span>
                 <span className="len">{formatDuration(t.mins)}</span>
@@ -153,7 +157,7 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
         )}
 
         <div className="export-groups">
-          {(['daily', 'weekly'] as const).map((group) => (
+          {GROUPS.map((group) => (
             <GroupCard key={group} group={group} tasks={tasks} weekStart={weekStart} settings={settings} onSettings={onSettings} />
           ))}
         </div>
@@ -199,7 +203,7 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
               Open each calendar's settings and set its colour (the <b>+</b> under the palette lets you pick any
               colour):
               <div className="swatches">
-                {(['daily', 'weekly'] as const).map((group) => (
+                {GROUPS.map((group) => (
                   <span key={group}>
                     <i style={{ ['--c' as string]: settings[group].color }} />
                     {GROUP_LABEL[group]} <code>{settings[group].color.toUpperCase()}</code>

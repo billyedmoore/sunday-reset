@@ -198,18 +198,15 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
         <details className="export-help" open>
           <summary>How to get these into Google Calendar</summary>
           <p className="hint">
-            Google colours every event by its calendar and can't set a colour during import, so Sunday Reset gives you
-            two files, one per calendar.
+            Google can't set colours during import, so you get one file per calendar.
           </p>
           <h4>Set up once</h4>
           <ol>
             <li>
-              In Google Calendar, next to <b>Other calendars</b> choose <b>+ → Create new calendar</b>. Make two,
-              named <b>{settings.daily.name}</b> and <b>{settings.weekly.name}</b>.
+              Next to <b>Other calendars</b> choose <b>+ → Create new calendar</b>. Make two, named <b>{settings.daily.name}</b> and <b>{settings.weekly.name}</b>.
             </li>
             <li>
-              Open each calendar's settings and set its colour (the <b>+</b> under the palette lets you pick any
-              colour):
+              Set each calendar's colour in its settings (<b>+</b> under the palette picks any colour):
               <div className="swatches">
                 {GROUPS.map((group) => (
                   <span key={group}>
@@ -235,8 +232,7 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
             </li>
           </ol>
           <p className="hint">
-            Each task keeps the same ID, so importing the same week again after you've moved things should update them.
-            If you ever see doubles, delete that week's events from the calendar and import again.
+            Tasks keep their ID, so re-importing a week updates them. If you see doubles, delete that week's events and import again.
           </p>
         </details>
       </div>

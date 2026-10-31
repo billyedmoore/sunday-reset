@@ -167,7 +167,7 @@ function TaskCard({ variant, color, title, note, day, tasks, weekStart, notice, 
       <ul>
         {mine.length === 0 && (
           <li className="empty">
-            {weekEmpty ? 'Add what needs doing this week. Each task is placed in free time on the calendar for you.' : 'Nothing planned yet'}
+            {weekEmpty ? 'Add what needs doing this week. Tasks are placed in free time for you.' : 'Nothing planned yet'}
           </li>
         )}
         {mine.map((t) => (

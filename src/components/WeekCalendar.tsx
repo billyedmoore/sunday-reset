@@ -256,7 +256,7 @@ function ImportIntro({ importing, onImport, onClose }: { importing: boolean; onI
         ×
       </button>
       <h3>Plan around your events</h3>
-      <p>Import a calendar and tasks will be placed in the gaps. Without one, they can go anywhere in the week.</p>
+      <p>Tasks are placed in the gaps between your events.</p>
       <div className="import-actions">
         <button className="btn small" onClick={onImport} disabled={importing} autoFocus>
           {importing ? 'Importing…' : 'Import calendar'}
@@ -274,21 +274,20 @@ function ImportIntro({ importing, onImport, onClose }: { importing: boolean; onI
           Not now
         </button>
       </div>
-      <p className="hint">Choose a Google Calendar export (.zip) or an .ics file, or drop it anywhere on the page.</p>
+      <p className="hint">Choose a Google Calendar .zip or an .ics file, or drop it anywhere.</p>
       {help && (
         <div className="import-help" id="import-help">
           <h4>From Google Calendar</h4>
           <ol>
             <li>
-              Open Google Calendar on a computer and go to <b>Settings (gear) → Import &amp; export → Export</b>.
+              In Google Calendar on a computer, open <b>Settings (gear) → Import &amp; export → Export</b>.
             </li>
             <li>
-              It downloads a <b>.zip</b> with one file per calendar. Leave it zipped and choose it here.
+              Choose the downloaded <b>.zip</b> here, still zipped.
             </li>
           </ol>
           <p className="hint">
-            Any other calendar app that exports an <b>.ics</b> file works too. The file is read in your browser and kept
-            only on this device.
+            Any <b>.ics</b> file works too. It is read in your browser and stays on this device.
           </p>
         </div>
       )}
@@ -521,8 +520,8 @@ export default function WeekCalendar({
       </div>
       {unplaced.length > 0 && (
         <p className="notice">
-          {unplaced.length === 1 ? "1 task doesn't" : `${unplaced.length} tasks don't`} fit: {unplaced.map((t) => t.title).join(', ')}. Open{' '}
-          {unplaced.length === 1 ? 'it' : 'them'} in the list to shorten, or place anyway.
+          {unplaced.length === 1 ? "1 task doesn't" : `${unplaced.length} tasks don't`} fit: {unplaced.map((t) => t.title).join(', ')}. Shorten
+          {unplaced.length === 1 ? ' it' : ' them'} in the list, or place anyway.
         </p>
       )}
 

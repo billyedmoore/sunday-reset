@@ -5,7 +5,7 @@ import WeekCalendar from './components/WeekCalendar'
 import { londonDay, upcomingMonday } from './ical/dates'
 import { importCalendarFile } from './ical/import'
 import type { StoredEvent } from './ical/parse'
-import { autoPlace, busyByDay, clearSlots, placementsOf, type ScheduleOptions } from './schedule'
+import { autoPlace, busyByDay, clearSlots, leastBadSlot, placementsOf, type ScheduleOptions } from './schedule'
 import { loadSettings, saveSettings, type Settings } from './settings'
 import { loadEvents, saveEvents } from './store'
 import {
@@ -105,6 +105,18 @@ export default function App() {
     setUndo(null)
   }
 
+  /** A task with no free gap: put it where it clashes least, marked as an overlap if it must. */
+  function onPlaceAnyway(id: string) {
+    const task = tasks.find((t) => t.id === id)
+    if (!task) return
+    const spot = leastBadSlot(task, busyTimes, placements, Math.min(7, Math.max(0, today - weekStart)))
+    if (!spot) {
+      setError(`"${task.title}" is longer than the 06:00 to 22:00 day, so it can't be placed.`)
+      return
+    }
+    editTasks((t) => moveTask(t, id, spot.day, spot.startMin, spot.overlap > 0))
+  }
+
   async function handleFile(file: File | undefined) {
     if (!file) return
     setError('')
@@ -151,6 +163,7 @@ export default function App() {
             editTasks((t) => autoPlace(addTask(t, { title, mins, day }), opts))
           }}
           onRemove={onRemove}
+          onPlaceAnyway={onPlaceAnyway}
           onSetMins={(id, mins) => {
             const opts = placeOpts()
             editTasks((t) => autoPlace(setTaskMins(t, id, mins), opts))

@@ -219,3 +219,36 @@ export const placementsOf = (tasks: Task[]): Placement[] =>
  */
 export const clearSlots = (tasks: Task[]): Task[] =>
   tasks.map((t) => (t.slot?.manual ? t : { ...t, slot: undefined }))
+
+const overlapMins = (a: Busy, startMin: number, endMin: number) =>
+  Math.max(0, Math.min(a.end, endMin) - Math.max(a.start, startMin))
+
+/**
+ * Where a task fits least badly, for "place it anyway" when there's no free gap. Looks at its own day
+ * (or any day from `firstDay` for an "any time" task) and picks the start with the least overlap,
+ * preferring the lightest and then the earliest day/time. `overlap` is how many minutes it will clash.
+ */
+export function leastBadSlot(
+  task: Task,
+  busy: Busy[][],
+  placements: Placement[],
+  firstDay = 0,
+  step = 15,
+): { day: number; startMin: number; overlap: number } | null {
+  const from = Math.max(0, firstDay)
+  const days = task.day === null ? Array.from({ length: 7 - from }, (_, i) => i + from) : [task.day]
+  let best: { day: number; startMin: number; overlap: number; load: number } | null = null
+  for (const day of days) {
+    if (day < 0 || day > 6) continue
+    const others: Busy[] = [
+      ...busy[day],
+      ...placements.filter((p) => p.day === day && p.task.id !== task.id).map((p) => ({ start: p.startMin, end: p.startMin + p.task.mins })),
+    ]
+    const load = others.reduce((n, b) => n + b.end - b.start, 0)
+    for (let s = DAY_START; s + task.mins <= DAY_END; s += step) {
+      const overlap = others.reduce((n, b) => n + overlapMins(b, s, s + task.mins), 0)
+      if (!best || overlap < best.overlap || (overlap === best.overlap && load < best.load)) best = { day, startMin: s, overlap, load }
+    }
+  }
+  return best && { day: best.day, startMin: best.startMin, overlap: best.overlap }
+}

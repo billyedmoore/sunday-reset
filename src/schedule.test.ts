@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { dayNum } from './ical/dates'
 import { parseIcs } from './ical/parse'
-import { autoPlace, busyByDay, clearSlots, placementsOf, scheduleTasks, slotFree, type Busy, type Placement } from './schedule'
+import { autoPlace, busyByDay, clearSlots, leastBadSlot, placementsOf, scheduleTasks, slotFree, type Busy, type Placement } from './schedule'
 import type { Task } from './tasks'
 
 const task = (id: string, mins: number, day: number | null): Task => ({ id, title: id, mins, day })
@@ -237,6 +237,41 @@ describe('shuffling keeps what the user moved', () => {
     const [moved] = autoPlace([stale], { busy, seed: 3 })
     expect(moved.slot).toBeDefined()
     expect(moved.slot!.manual).toBeUndefined()
+  })
+})
+
+describe('leastBadSlot ("place it anyway")', () => {
+  it('finds a clash-free spot when there is one, even if the scheduler refused', () => {
+    const busy = empty()
+    busy[1] = [{ start: 6 * 60, end: 21 * 60 }] // only 21:00-22:00 is left
+    expect(leastBadSlot(task('a', 60, 1), busy, [], 0)).toEqual({ day: 1, startMin: 21 * 60, overlap: 0 })
+  })
+
+  it('picks the smallest clash when the day is full, and reports it', () => {
+    const busy = empty()
+    busy[2] = [{ start: 6 * 60, end: 22 * 60 }]
+    const slot = leastBadSlot(task('a', 60, 2), busy, [], 0)!
+    expect(slot.overlap).toBe(60)
+    expect(slot.day).toBe(2)
+  })
+
+  it('avoids other tasks as well as events', () => {
+    const other: Placement = { task: task('other', 60, null), day: 0, startMin: 6 * 60 }
+    const slot = leastBadSlot(task('a', 60, 0), empty(), [other], 0)!
+    expect(slot.overlap).toBe(0)
+    expect(slot.startMin).toBeGreaterThanOrEqual(7 * 60)
+  })
+
+  it('lets an "any time" task pick the quietest day from firstDay on', () => {
+    const busy = empty()
+    busy[3] = [{ start: 6 * 60, end: 22 * 60 }]
+    const slot = leastBadSlot(task('a', 60, null), busy, [], 3)!
+    expect(slot.day).toBeGreaterThanOrEqual(4) // day 3 is full, days before firstDay are skipped
+    expect(slot.overlap).toBe(0)
+  })
+
+  it('returns null if the task is longer than the whole window', () => {
+    expect(leastBadSlot(task('huge', 17 * 60, 1), empty(), [], 0)).toBeNull()
   })
 })
 

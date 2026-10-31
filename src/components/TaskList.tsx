@@ -11,6 +11,8 @@ interface Handlers {
   onAdd: (day: number | null, title: string, mins: number) => void
   onRemove: (id: string) => void
   onSetMins: (id: string, mins: number) => void
+  /** Put a task that has no free gap on the calendar anyway, where it clashes least. */
+  onPlaceAnyway: (id: string) => void
 }
 
 function DurationSelect({ value, onChange, label }: { value: number; onChange: (m: number) => void; label: string }) {
@@ -57,7 +59,7 @@ interface CardProps extends Handlers {
   tasks: Task[]
 }
 
-function TaskCard({ variant, color, title, note, day, tasks, onAdd, onRemove, onSetMins }: CardProps) {
+function TaskCard({ variant, color, title, note, day, tasks, onAdd, onRemove, onSetMins, onPlaceAnyway }: CardProps) {
   const mine = tasksFor(tasks, day)
   return (
     <section className={`task-card ${variant}`}>
@@ -71,12 +73,22 @@ function TaskCard({ variant, color, title, note, day, tasks, onAdd, onRemove, on
       <ul>
         {mine.length === 0 && <li className="empty">Nothing planned yet</li>}
         {mine.map((t) => (
-          <li key={t.id}>
+          <li key={t.id} className={t.slot ? '' : 'unplaced'}>
             <span className="title">{t.title}</span>
             <DurationSelect value={t.mins} onChange={(m) => onSetMins(t.id, m)} label={`Time for ${t.title}`} />
             <button className="x" onClick={() => onRemove(t.id)} aria-label={`Delete ${t.title}`}>
               ×
             </button>
+            {!t.slot && (
+              <div className="unplaced-note" role="status">
+                <span>
+                  No free {formatDuration(t.mins)} gap {t.day === null ? 'this week' : `on ${DAY_SHORT[t.day]}`}.
+                </span>
+                <button className="btn small ghost" onClick={() => onPlaceAnyway(t.id)}>
+                  Place anyway
+                </button>
+              </div>
+            )}
           </li>
         ))}
       </ul>

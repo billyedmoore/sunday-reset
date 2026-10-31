@@ -251,7 +251,10 @@ export default function WeekCalendar({
         <button className="btn small ghost" onClick={onImport}>Re-import</button>
       </div>
       {unplaced.length > 0 && (
-        <p className="error">Couldn't fit: {unplaced.map((t) => `${t.title} (${formatDuration(t.mins)})`).join(', ')}</p>
+        <p className="error">
+          {unplaced.length === 1 ? "1 task doesn't" : `${unplaced.length} tasks don't`} fit: {unplaced.map((t) => t.title).join(', ')}. Open{' '}
+          {unplaced.length === 1 ? 'it' : 'them'} in the list to shorten, or place anyway.
+        </p>
       )}
 
       <div className="cal-scroll">

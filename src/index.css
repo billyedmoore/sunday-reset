@@ -779,3 +779,26 @@ h1 {
 .toast .x {
   color: #fff;
 }
+
+/* ---- Tasks that don't fit ---- */
+.task-card li {
+  flex-wrap: wrap;
+}
+
+.task-card li.unplaced .title {
+  color: #8f0f37;
+}
+
+.unplaced-note {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 6px 8px;
+  border: 1px dashed #8f0f37;
+  border-radius: 8px;
+  background: color-mix(in srgb, #8f0f37 8%, var(--surface));
+  font-size: 0.8rem;
+  color: #8f0f37;
+}

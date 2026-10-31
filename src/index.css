@@ -912,3 +912,9 @@ h1 {
   margin: 0;
   font-size: 1.1rem;
 }
+
+/* Keyboard focus is visible on the controls that are not ordinary buttons. */
+.chip.task-chip:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 1px;
+}

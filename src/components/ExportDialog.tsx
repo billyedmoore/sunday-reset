@@ -3,7 +3,7 @@ import { downloadText } from '../download'
 import { buildIcs, exportableTasks, icsFilename } from '../exportIcs'
 import { DAY_SHORT, MONTHS, hhmm } from '../format'
 import { fromDayNum } from '../ical/dates'
-import { GROUPS, GROUP_LABEL, type Group, type Settings } from '../settings'
+import { DEFAULT_SETTINGS, GROUPS, GROUP_LABEL, type Group, type Settings } from '../settings'
 import { formatDuration, totalMins, type Task } from '../tasks'
 
 const REMINDERS = [0, 5, 10, 15, 30, 60]
@@ -69,7 +69,11 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
 
       <label className="field">
         Google calendar name
-        <input value={g.name} onChange={(e) => setGroup({ name: e.target.value })} />
+        <input
+          value={g.name}
+          onChange={(e) => setGroup({ name: e.target.value })}
+          onBlur={() => !g.name.trim() && setGroup({ name: DEFAULT_SETTINGS[group].name })}
+        />
       </label>
 
       {list.length === 0 ? (
@@ -105,7 +109,7 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
 
 export default function ExportDialog({ open, onClose, tasks, weekStart, settings, onSettings }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
-  const [copied, setCopied] = useState<Group | null>(null)
+  const [copied, setCopied] = useState<{ group: Group; ok: boolean } | null>(null)
 
   useEffect(() => {
     const dialog = ref.current
@@ -117,13 +121,17 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
   async function copyHex(group: Group) {
     try {
       await navigator.clipboard.writeText(settings[group].color)
-      setCopied(group)
-      setTimeout(() => setCopied(null), 1500)
+      setCopied({ group, ok: true })
     } catch {
       // clipboard blocked: the hex is shown next to the button to copy by hand
+      setCopied({ group, ok: false })
     }
+    setTimeout(() => setCopied(null), 1500)
   }
 
+  const first = fromDayNum(weekStart)
+  const last = fromDayNum(weekStart + 6)
+  const range = `${first.d} ${MONTHS[first.m - 1]} – ${last.d} ${MONTHS[last.m - 1]}`
   const unplaced = tasks.filter((t) => !t.slot)
   const forced = tasks.filter((t) => t.slot?.forced)
 
@@ -138,7 +146,7 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
     >
       <div className="export-body">
         <header>
-          <h2>Export to Google Calendar</h2>
+          <h2>Export to Google Calendar: {range}</h2>
           <button className="x" onClick={onClose} aria-label="Close">
             ×
           </button>
@@ -208,7 +216,7 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
                     <i style={{ ['--c' as string]: settings[group].color }} />
                     {GROUP_LABEL[group]} <code>{settings[group].color.toUpperCase()}</code>
                     <button className="btn small ghost" onClick={() => copyHex(group)}>
-                      {copied === group ? 'Copied' : 'Copy'}
+                      {copied?.group !== group ? 'Copy' : copied.ok ? 'Copied' : 'Copy failed'}
                     </button>
                   </span>
                 ))}

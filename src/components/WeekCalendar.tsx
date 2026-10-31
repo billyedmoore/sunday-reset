@@ -432,12 +432,16 @@ export default function WeekCalendar({
           className="btn small dice"
           onClick={onShuffle}
           disabled={!canShuffle}
-          title="Shuffle tasks into different free slots"
-          aria-label="Shuffle tasks"
+          title={canShuffle ? 'Shuffle tasks into different free slots' : 'Add a task first, then shuffle to try other slots'}
         >
-          🎲
+          🎲 Shuffle
         </button>
-        <button className="btn small" onClick={onExport} disabled={!canExport} title="Export tasks to Google Calendar">
+        <button
+          className="btn small"
+          onClick={onExport}
+          disabled={!canExport}
+          title={canExport ? 'Export tasks to Google Calendar' : 'Nothing to export yet: add a task that fits on the calendar'}
+        >
           Export
         </button>
         <button className="btn small ghost" onClick={onImport} disabled={importing}>

@@ -3,6 +3,8 @@ import type { Task } from './tasks'
 /** Tasks pinned to a day export to one calendar; "any time this week" tasks to another. */
 export type Group = 'daily' | 'weekly'
 
+export const GROUPS = ['daily', 'weekly'] as const
+
 export const groupOf = (t: Task): Group => (t.day === null ? 'weekly' : 'daily')
 
 export interface GroupSettings {

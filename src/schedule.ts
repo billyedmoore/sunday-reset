@@ -62,6 +62,8 @@ function shuffled<T>(items: T[], rand: () => number): T[] {
 
 export const DAY_START = 6 * 60
 export const DAY_END = 22 * 60
+/** Tasks start on multiples of this many minutes. */
+export const STEP_MIN = 15
 
 const overlaps = (list: Busy[], s: number, mins: number, gap: number) =>
   list.some((b) => s < b.end + gap && s + mins + gap > b.start)
@@ -91,7 +93,7 @@ export function slotFree(
  * day stay on that day; "any time" tasks go on any day, favouring the quieter ones.
  */
 export function scheduleTasks(tasks: Task[], opts: ScheduleOptions): ScheduleResult {
-  const { busy, seed, dayStart = DAY_START, dayEnd = DAY_END, step = 15, gap = 15, firstDay = 0 } = opts
+  const { busy, seed, dayStart = DAY_START, dayEnd = DAY_END, step = STEP_MIN, gap = 15, firstDay = 0 } = opts
   const rand = mulberry32(seed)
   const taken: Busy[][] = busy.map((day) => [...day])
   const load = new Array<number>(7).fill(0)
@@ -233,7 +235,7 @@ export function leastBadSlot(
   busy: Busy[][],
   placements: Placement[],
   firstDay = 0,
-  step = 15,
+  step = STEP_MIN,
 ): { day: number; startMin: number; overlap: number } | null {
   const from = Math.max(0, firstDay)
   const days = task.day === null ? Array.from({ length: 7 - from }, (_, i) => i + from) : [task.day]

@@ -341,9 +341,11 @@ export default function WeekCalendar({
       return
     }
     // Overlaps something: show it there and ask, as a drag would.
+    // The popup points at the spot it's previewed in, not where the block was.
     const r = e.currentTarget.getBoundingClientRect()
+    const colW = e.currentTarget.parentElement?.getBoundingClientRect().width ?? r.width
     setDrag({ id: taskId, day, startMin, valid: false })
-    setPending({ id: taskId, day, startMin, x: r.left, y: r.top, conflicts: conflictsAt(taskId, day, startMin, mins) })
+    setPending({ id: taskId, day, startMin, x: r.left + dx * colW, y: r.top + dy * pxPerMin, conflicts: conflictsAt(taskId, day, startMin, mins) })
   }
 
   /** Drag a task block: it follows the pointer in 15 minute steps and only lands on free time. */
@@ -520,7 +522,10 @@ export default function WeekCalendar({
             className="conflict-pop"
             role="alertdialog"
             aria-label="This overlaps something"
-            style={{ left: Math.min(pending.x, window.innerWidth - 260), top: Math.min(pending.y + 12, window.innerHeight - 160) }}
+            style={{
+              left: Math.max(8, Math.min(pending.x, window.innerWidth - 260)),
+              top: Math.max(8, Math.min(pending.y + 12, window.innerHeight - 160)),
+            }}
           >
             <p>
               This overlaps <b>{pending.conflicts.join(', ') || 'something'}</b>.

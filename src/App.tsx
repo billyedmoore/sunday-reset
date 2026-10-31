@@ -284,9 +284,11 @@ export default function App() {
             canShuffle={tasks.length > 0}
             onShuffle={requestShuffle}
           />
-          {shuffleAsk && (
+          {/* One popup at a time: the question first, then any error. */}
+          {shuffleAsk ? (
             <ErrorPopup
               message={shuffleAsk}
+              label="Before you shuffle"
               confirmLabel="Continue"
               onClose={() => setShuffleAsk('')}
               onConfirm={() => {
@@ -294,8 +296,9 @@ export default function App() {
                 shuffle(true)
               }}
             />
+          ) : (
+            error && <ErrorPopup message={error} onClose={() => setError('')} />
           )}
-          {error && <ErrorPopup message={error} onClose={() => setError('')} />}
           <input
             ref={fileInput}
             type="file"

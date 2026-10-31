@@ -218,6 +218,11 @@ describe('shuffling keeps what the user moved', () => {
     expect(cleared[1].slot).toBeUndefined()
   })
 
+  it('clearSlots can forget hand-placed tasks too', () => {
+    const mine: Task = { ...task('mine', 60, null), slot: { day: 1, startMin: 600, manual: true } }
+    expect(clearSlots([mine], true)[0].slot).toBeUndefined()
+  })
+
   it('a re-roll leaves manual tasks in place and keeps them manual', () => {
     const mine: Task = { ...task('mine', 60, null), slot: { day: 1, startMin: 600, manual: true } }
     const others = Array.from({ length: 5 }, (_, i) => task(`t${i}`, 60, null))

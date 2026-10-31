@@ -10,18 +10,27 @@ import { formatDuration, type Task } from '../tasks'
 
 const START_HOUR = 6
 const END_HOUR = 22
+/** The shortest a block is drawn, so a 15 minute event is still readable without looking longer. */
+const MIN_CHIP_PX = 14
+/** Blocks shorter than this (about an hour on a laptop) show the title and time on one line. */
+const SHORT_PX = 48
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const hhmm = (min: number) => `${pad(Math.floor(min / 60) % 24)}:${pad(min % 60)}`
 
-function timeLabel(s: Segment): string {
-  if (s.occ.allDay || s.wholeDay) return s.occ.location
+function rangeLabel(s: Segment): string {
+  if (s.occ.allDay || s.wholeDay) return ''
   const from = s.continuesBefore ? '' : hhmm(s.startMin)
   const to = s.continuesAfter ? '' : hhmm(s.endMin)
-  const range = from && to ? `${from}-${to}` : from ? `${from} →` : `→ ${to}`
-  return s.occ.location ? `${range} · ${s.occ.location}` : range
+  return from && to ? `${from}-${to}` : from ? `${from} →` : `→ ${to}`
+}
+
+function timeLabel(s: Segment): string {
+  const range = rangeLabel(s)
+  if (!s.occ.location) return range
+  return range ? `${range} · ${s.occ.location}` : s.occ.location
 }
 
 interface Props {
@@ -72,6 +81,20 @@ export default function WeekCalendar({
   )
 
   const colRefs = useRef<(HTMLDivElement | null)[]>([])
+  // How tall the day columns are on screen, so a block's drawn size (and the side-by-side layout that
+  // depends on it) matches what the user sees, not just the event's length.
+  const [colH, setColH] = useState(0)
+  useEffect(() => {
+    const el = colRefs.current[0]
+    if (!el) return
+    const ro = new ResizeObserver(() => setColH(el.getBoundingClientRect().height))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const pxPerMin = (colH || 640) / ((END_HOUR - START_HOUR) * 60)
+  /** Where a block visually ends: short events are drawn at least MIN_CHIP_PX tall. */
+  const visualEnd = (start: number, end: number) => Math.max(end, start + Math.ceil(MIN_CHIP_PX / pxPerMin))
+  const isShort = (start: number, end: number) => (end - start) * pxPerMin < SHORT_PX
   const [drag, setDrag] = useState<{ id: string; day: number; startMin: number; valid: boolean } | null>(null)
   // A drop that overlaps something waits here for the user to say "put it there anyway" or cancel.
   const [pending, setPending] = useState<{
@@ -262,8 +285,12 @@ export default function WeekCalendar({
               // dragged floats above instead and doesn't reshuffle the others.
               const forcedHere = shown.filter((p) => p.day === i && p.forced && drag?.id !== p.task.id)
               const lanes = layoutLanes([
-                ...dayEvents.map((s) => ({ key: eventKey(s), startMin: s.startMin, endMin: s.endMin })),
-                ...forcedHere.map((p) => ({ key: `task-${p.task.id}`, startMin: p.startMin, endMin: p.startMin + p.task.mins })),
+                ...dayEvents.map((s) => ({ key: eventKey(s), startMin: s.startMin, endMin: visualEnd(s.startMin, s.endMin) })),
+                ...forcedHere.map((p) => ({
+                  key: `task-${p.task.id}`,
+                  startMin: p.startMin,
+                  endMin: visualEnd(p.startMin, p.startMin + p.task.mins),
+                })),
               ])
               const blocks = segments.filter((s) => s.wholeDay && s.day === day)
               return (
@@ -292,11 +319,12 @@ export default function WeekCalendar({
                   ))}
                   {dayEvents.map((seg) => {
                     const { lane, lanes: count } = lanes.get(eventKey(seg)) ?? { lane: 0, lanes: 1 }
+                    const short = isShort(seg.startMin, seg.endMin)
                     return (
                     <div
                       key={`${seg.occ.id}-${seg.day}`}
-                      className={`chip timed${seg.continuesBefore ? ' before' : ''}${clashing.has(`${seg.occ.id}-${seg.day}`) ? ' clash' : ''}`}
-                      title={`${seg.occ.title} (${seg.occ.calendar})`}
+                      className={`chip timed${short ? ' short' : ''}${seg.continuesBefore ? ' before' : ''}${clashing.has(`${seg.occ.id}-${seg.day}`) ? ' clash' : ''}`}
+                      title={`${seg.occ.title}${rangeLabel(seg) ? `, ${rangeLabel(seg)}` : ''} (${seg.occ.calendar})`}
                       style={{
                         ['--c' as string]: colors[seg.occ.calendar],
                         top: pct(seg.startMin),
@@ -306,7 +334,7 @@ export default function WeekCalendar({
                       }}
                     >
                       <div className="t">{seg.occ.title}</div>
-                      <div className="m">{timeLabel(seg)}</div>
+                      <div className="m">{short ? rangeLabel(seg) : timeLabel(seg)}</div>
                     </div>
                     )
                   })}
@@ -321,7 +349,7 @@ export default function WeekCalendar({
                       return (
                       <div
                         key={p.task.id}
-                        className={`chip timed task-chip${p.forced ? ' forced' : ''}${drag?.id === p.task.id ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
+                        className={`chip timed task-chip${isShort(p.startMin, p.startMin + p.task.mins) ? ' short' : ''}${p.forced ? ' forced' : ''}${drag?.id === p.task.id ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
                         onPointerDown={(e) => startDrag(e, p.task.id)}
                         title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(p.startMin + p.task.mins)} (drag to move)`}
                         style={{

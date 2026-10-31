@@ -429,7 +429,7 @@ h1 {
 .chip.timed {
   position: absolute;
   margin: 0;
-  min-height: 18px;
+  min-height: 14px;
 }
 
 /* Whole-day events block off the full column; timed events sit on top. */
@@ -717,4 +717,38 @@ h1 {
   height: 14px;
   border-radius: 50%;
   background: var(--c);
+}
+
+/* Short blocks (under about an hour on a laptop): the title and time share one line instead of being
+   clipped, and the block is drawn at its true length so back-to-back events don't appear to touch. */
+.chip.timed.short {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1.1;
+  white-space: nowrap;
+  container-type: inline-size;
+}
+
+/* The title keeps its space; the time takes whatever is left and goes entirely when it can't fit. */
+.chip.timed.short .t {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip.timed.short .m {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+@container (max-width: 175px) {
+  .chip.timed.short .m {
+    display: none;
+  }
 }

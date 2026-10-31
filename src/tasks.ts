@@ -10,7 +10,7 @@ export interface Task {
     startMin: number
     /** The user chose to overlap something here. */
     forced?: boolean
-    /** The user put it here (dragged, moved by keyboard, or placed anyway), so a shuffle leaves it alone. */
+    /** The user put it here (dragged, nudged with the keyboard, or placed anyway), so a shuffle leaves it alone. */
     manual?: boolean
   }
 }
@@ -52,8 +52,13 @@ export const updateTask = (tasks: Task[], id: string, patch: { title?: string; d
     return { ...t, title, day: patch.day === undefined ? t.day : patch.day, slot: dayChanged ? undefined : t.slot }
   })
 
+/**
+ * Change a task's length. The slot is kept so the scheduler can leave it at the same start if the new
+ * length still fits there (it re-places the task if not); a deliberate overlap is dropped, as it was
+ * chosen for the old length.
+ */
 export const setTaskMins = (tasks: Task[], id: string, mins: number): Task[] =>
-  tasks.map((t) => (t.id === id ? { ...t, mins, slot: undefined } : t)) // a new length needs a new slot
+  tasks.map((t) => (t.id === id ? { ...t, mins, slot: t.slot?.forced ? undefined : t.slot } : t))
 
 /**
  * Drop a task at a new place. A day-pinned task follows to its new day (so the list on the left stays

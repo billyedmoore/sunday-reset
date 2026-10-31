@@ -3,7 +3,7 @@ import ExportDialog from './components/ExportDialog'
 import ErrorPopup from './components/ErrorPopup'
 import TaskList, { type PlacedNotice } from './components/TaskList'
 import WeekCalendar from './components/WeekCalendar'
-import { DAY_FULL, hhmm } from './format'
+import { DAY_FULL, DAY_SHORT, hhmm } from './format'
 import { londonDay, upcomingMonday } from './ical/dates'
 import { importCalendarFile } from './ical/import'
 import type { StoredEvent } from './ical/parse'
@@ -88,6 +88,9 @@ export default function App() {
   const changeWeek = (start: number) => {
     const opts = scheduleOpts(events, start, today)
     setWeekStart(start)
+    // Feedback about the old week would point at tasks that aren't on screen any more.
+    setNotice(null)
+    setHighlightId(null)
     setTasksByWeek((all) => placeWeek(all, start, opts))
   }
 
@@ -146,15 +149,25 @@ export default function App() {
     setUndo(null)
   }
 
-  function onEdit(id: string, patch: Parameters<typeof updateTask>[2]) {
-    const opts = placeOpts()
-    editTasks((t) => autoPlace(updateTask(t, id, patch), opts))
+  /** Apply an edit, re-place, and say so if the task ended up somewhere new (or nowhere). */
+  function applyEdit(id: string, change: (tasks: Task[]) => Task[]) {
+    const before = tasks.find((t) => t.id === id)
+    const next = autoPlace(change(tasks), placeOpts())
+    const after = next.find((t) => t.id === id)
+    updateWeek(weekStart, () => next)
+    if (!before || !after) return
+    const from = before.slot
+    const to = after.slot
+    if (!to) {
+      if (from) showNotice(`"${after.title}" no longer fits in free time this week.`, after.day)
+    } else if (!from || from.day !== to.day || from.startMin !== to.startMin) {
+      setHighlightId(id)
+      showNotice(`Moved to ${DAY_SHORT[to.day]} ${hhmm(to.startMin)}.`, after.day)
+    }
   }
 
-  function onSetMins(id: string, mins: number) {
-    const opts = placeOpts()
-    editTasks((t) => autoPlace(setTaskMins(t, id, mins), opts))
-  }
+  const onEdit = (id: string, patch: Parameters<typeof updateTask>[2]) => applyEdit(id, (t) => updateTask(t, id, patch))
+  const onSetMins = (id: string, mins: number) => applyEdit(id, (t) => setTaskMins(t, id, mins))
 
   /** A task with no free gap: put it where it clashes least, marked as an overlap if it must. */
   function onPlaceAnyway(id: string) {
@@ -239,6 +252,7 @@ export default function App() {
       <h1>Sunday Reset</h1>
       <div className="layout">
         <TaskList
+          key={weekStart}
           today={today}
           colors={groupColors}
           weekStart={weekStart}

@@ -4,7 +4,7 @@ export default function UnsupportedScreen() {
     <main className="unsupported" role="alert">
       <h1>Sunday Reset</h1>
       <p>Sunday Reset needs a laptop or desktop screen.</p>
-      <p className="hint">Open it there to plan your week. Your tasks and settings stay saved in that browser.</p>
+      <p className="hint">Open it there to plan your week. Your data stays in that browser.</p>
     </main>
   )
 }

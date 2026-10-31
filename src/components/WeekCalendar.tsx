@@ -71,6 +71,8 @@ interface Props {
   onShift: (weeks: number) => void
   onToday: () => void
   onImport: () => void
+  /** A calendar file is being read, so importing is unavailable for a moment. */
+  importing: boolean
   /** Tasks placed into free time. These are shown here only, not written to any calendar. */
   placements: Placement[]
   unplaced: Task[]
@@ -233,6 +235,7 @@ export default function WeekCalendar({
   onShift,
   onToday,
   onImport,
+  importing,
   placements,
   unplaced,
   canShuffle,
@@ -409,8 +412,19 @@ export default function WeekCalendar({
         <button className="btn small" onClick={onExport} disabled={!canExport} title="Export tasks to Google Calendar">
           Export
         </button>
-        <button className="btn small ghost" onClick={onImport}>Re-import</button>
+        <button className="btn small ghost" onClick={onImport} disabled={importing}>
+          {importing ? 'Importing…' : events.length ? 'Re-import' : 'Import calendar'}
+        </button>
       </div>
+      {events.length === 0 && (
+        <p className="notice">
+          No calendar imported yet, so tasks are placed anywhere in the week. Choose a Google Calendar export (.zip) or an
+          .ics file, or drop it here, to plan around your events.{' '}
+          <button className="btn small" onClick={onImport} disabled={importing}>
+            {importing ? 'Importing…' : 'Import calendar'}
+          </button>
+        </p>
+      )}
       {unplaced.length > 0 && (
         <p className="notice">
           {unplaced.length === 1 ? "1 task doesn't" : `${unplaced.length} tasks don't`} fit: {unplaced.map((t) => t.title).join(', ')}. Open{' '}

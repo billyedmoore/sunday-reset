@@ -65,6 +65,7 @@ export default function App() {
   const [shuffleAsk, setShuffleAsk] = useState('')
   const [importing, setImporting] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const importingRef = useRef(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => saveTasks(tasksByWeek), [tasksByWeek])
@@ -175,7 +176,9 @@ export default function App() {
   }
 
   async function handleFile(file: File | undefined) {
-    if (!file) return
+    // The ref (not the state) is checked so two quick drops can't both start an import.
+    if (!file || importingRef.current) return
+    importingRef.current = true
     setError('')
     setImporting(true)
     try {
@@ -194,6 +197,7 @@ export default function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that file')
     } finally {
+      importingRef.current = false
       setImporting(false)
     }
   }
@@ -231,33 +235,25 @@ export default function App() {
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
         >
-          {events.length ? (
-            <WeekCalendar
-              events={events}
-              weekStart={weekStart}
-              today={today}
-              onShift={(w) => changeWeek(weekStart + 7 * w)}
-              onToday={() => changeWeek(upcomingMonday(Date.now()))}
-              onImport={pick}
-              placements={placements}
-              unplaced={unplaced}
-              busy={busyTimes}
-              groupColors={groupColors}
-              canExport={placements.length > 0}
-              onExport={() => setExportOpen(true)}
-              onMoveTask={(id, day, startMin, forced) => editTasks((t) => moveTask(t, id, day, startMin, forced))}
-              highlightId={highlightId}
-              canShuffle={tasks.length > 0}
-              onShuffle={requestShuffle}
-            />
-          ) : (
-            <div className="panel-empty">
-              <button className="btn" onClick={pick} disabled={importing}>
-                {importing ? 'Importing…' : 'Import Calendar'}
-              </button>
-              <p className="hint">Choose a Google Calendar export (.zip) or an .ics file, or drop it here.</p>
-            </div>
-          )}
+          <WeekCalendar
+            events={events}
+            weekStart={weekStart}
+            today={today}
+            onShift={(w) => changeWeek(weekStart + 7 * w)}
+            onToday={() => changeWeek(upcomingMonday(Date.now()))}
+            onImport={pick}
+            importing={importing}
+            placements={placements}
+            unplaced={unplaced}
+            busy={busyTimes}
+            groupColors={groupColors}
+            canExport={placements.length > 0}
+            onExport={() => setExportOpen(true)}
+            onMoveTask={(id, day, startMin, forced) => editTasks((t) => moveTask(t, id, day, startMin, forced))}
+            highlightId={highlightId}
+            canShuffle={tasks.length > 0}
+            onShuffle={requestShuffle}
+          />
           {shuffleAsk && (
             <ErrorPopup
               message={shuffleAsk}

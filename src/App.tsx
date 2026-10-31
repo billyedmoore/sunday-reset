@@ -204,14 +204,38 @@ export default function App() {
 
   const pick = () => fileInput.current?.click()
 
-  function onDrop(e: DragEvent) {
+  // File drops are handled for the whole page, so a file dropped just outside the calendar doesn't make
+  // the browser open it. The counter stops the outline flickering as the drag crosses child elements.
+  const dragDepth = useRef(0)
+  const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files')
+
+  function onDragEnter(e: DragEvent) {
+    if (!hasFiles(e)) return
     e.preventDefault()
+    dragDepth.current++
+    setDragging(true)
+  }
+
+  function onDragOver(e: DragEvent) {
+    if (hasFiles(e)) e.preventDefault()
+  }
+
+  function onDragLeave(e: DragEvent) {
+    if (!hasFiles(e)) return
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (!dragDepth.current) setDragging(false)
+  }
+
+  function onDrop(e: DragEvent) {
+    if (!hasFiles(e)) return
+    e.preventDefault()
+    dragDepth.current = 0
     setDragging(false)
     void handleFile(e.dataTransfer.files[0])
   }
 
   return (
-    <div className="app">
+    <div className="app" onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       <h1>Sunday Reset</h1>
       <div className="layout">
         <TaskList
@@ -226,15 +250,7 @@ export default function App() {
           onPlaceAnyway={onPlaceAnyway}
           onSetMins={onSetMins}
         />
-        <section
-          className={`panel${dragging ? ' dragging' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragging(true)
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-        >
+        <section className={`panel${dragging ? ' dragging' : ''}`}>
           <WeekCalendar
             events={events}
             weekStart={weekStart}

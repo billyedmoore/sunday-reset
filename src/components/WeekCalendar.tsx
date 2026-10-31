@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { calendarColors } from '../colors'
+import { DAY_SHORT, MONTHS, hhmm } from '../format'
 import { fromDayNum, midnightOf } from '../ical/dates'
 import { eventsBetween, splitByDay, type Segment } from '../ical/expand'
 import type { StoredEvent } from '../ical/parse'
@@ -14,11 +15,6 @@ const END_HOUR = 22
 const MIN_CHIP_PX = 14
 /** Blocks shorter than this (about an hour on a laptop) show the title and time on one line. */
 const SHORT_PX = 48
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-const pad = (n: number) => String(n).padStart(2, '0')
-const hhmm = (min: number) => `${pad(Math.floor(min / 60) % 24)}:${pad(min % 60)}`
 
 function rangeLabel(s: Segment): string {
   if (s.occ.allDay || s.wholeDay) return ''
@@ -55,6 +51,8 @@ interface Props {
   onExport: () => void
   /** `forced` means the user chose to overlap something. */
   onMoveTask: (id: string, day: number, startMin: number, forced: boolean) => void
+  /** A task that was just added or placed, which pulses briefly so you can see where it landed. */
+  highlightId: string | null
 }
 
 export default function WeekCalendar({
@@ -73,6 +71,7 @@ export default function WeekCalendar({
   canExport,
   onExport,
   onMoveTask,
+  highlightId,
 }: Props) {
   const colors = useMemo(() => calendarColors(events), [events])
   const segments = useMemo(
@@ -261,7 +260,7 @@ export default function WeekCalendar({
         <div className="cal">
           <div className="row">
             <div className="dayhead" style={{ borderLeft: 0 }} />
-            {DAY_NAMES.map((name, i) => {
+            {DAY_SHORT.map((name, i) => {
               const { d } = fromDayNum(weekStart + i)
               return (
                 <div key={name} className={`dayhead${weekStart + i === today ? ' today' : ''}`}>
@@ -280,9 +279,12 @@ export default function WeekCalendar({
                 </div>
               ))}
             </div>
-            {DAY_NAMES.map((name, i) => {
+            {DAY_SHORT.map((name, i) => {
               const day = weekStart + i
               const dayEvents = timed.filter((s) => s.day === day && visible(s))
+              // Events wholly outside the visible hours get a small marker instead of vanishing.
+              const earlier = timed.filter((s) => s.day === day && s.endMin <= START_HOUR * 60)
+              const later = timed.filter((s) => s.day === day && s.startMin >= END_HOUR * 60)
               const eventKey = (s: Segment) => `${s.occ.id}-${s.day}`
               // Events and forced tasks share lanes, so an overlap puts them side by side. A task being
               // dragged floats above instead and doesn't reshuffle the others.
@@ -352,7 +354,7 @@ export default function WeekCalendar({
                       return (
                       <div
                         key={p.task.id}
-                        className={`chip timed task-chip${isShort(p.startMin, p.startMin + p.task.mins) ? ' short' : ''}${p.forced ? ' forced' : ''}${drag?.id === p.task.id ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
+                        className={`chip timed task-chip${isShort(p.startMin, p.startMin + p.task.mins) ? ' short' : ''}${highlightId === p.task.id ? ' pulse' : ''}${p.forced ? ' forced' : ''}${drag?.id === p.task.id ? (drag.valid ? ' dragging' : ' dragging invalid') : ''}`}
                         onPointerDown={(e) => startDrag(e, p.task.id)}
                         title={`${p.task.title}: ${hhmm(p.startMin)}-${hhmm(p.startMin + p.task.mins)} (drag to move)`}
                         style={{
@@ -371,6 +373,24 @@ export default function WeekCalendar({
                       </div>
                       )
                     })}
+                  {earlier.length > 0 && (
+                    <div
+                      className="edge top"
+                      title={`Before ${hhmm(START_HOUR * 60)}: ${earlier.map((s) => s.occ.title).join(', ')}`}
+                      aria-label={`${earlier.length} earlier event${earlier.length > 1 ? 's' : ''}: ${earlier.map((s) => s.occ.title).join(', ')}`}
+                    >
+                      ↑ {earlier.length}
+                    </div>
+                  )}
+                  {later.length > 0 && (
+                    <div
+                      className="edge bottom"
+                      title={`After ${hhmm(END_HOUR * 60)}: ${later.map((s) => s.occ.title).join(', ')}`}
+                      aria-label={`${later.length} later event${later.length > 1 ? 's' : ''}: ${later.map((s) => s.occ.title).join(', ')}`}
+                    >
+                      ↓ {later.length}
+                    </div>
+                  )}
                 </div>
               )
             })}

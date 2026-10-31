@@ -808,3 +808,91 @@ h1 {
   color: var(--muted);
   opacity: 1;
 }
+
+/* ---- Editing and feedback ---- */
+.title-button {
+  flex: 1 1 7rem;
+  min-width: 0;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+
+.title-button:hover {
+  border-color: var(--line);
+}
+
+.title-input {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+
+.placed-note {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Events that sit outside the visible hours */
+.edge {
+  position: absolute;
+  right: 3px;
+  z-index: 3;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.edge.top {
+  top: 2px;
+}
+
+.edge.bottom {
+  bottom: 2px;
+}
+
+/* A just-added task pulses so you can see where it landed */
+.chip.task-chip.pulse {
+  animation: pulse 0.9s ease-in-out 2;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--c) 45%, transparent);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip.task-chip.pulse {
+    animation: none;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 45%, transparent);
+  }
+
+  .placed-note {
+    animation: none;
+  }
+}

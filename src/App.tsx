@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import ExportDialog from './components/ExportDialog'
-import TaskList from './components/TaskList'
+import TaskList, { type PlacedNotice } from './components/TaskList'
 import WeekCalendar from './components/WeekCalendar'
+import { DAY_FULL, hhmm } from './format'
 import { londonDay, upcomingMonday } from './ical/dates'
 import { importCalendarFile } from './ical/import'
 import type { StoredEvent } from './ical/parse'
@@ -16,6 +17,7 @@ import {
   restoreTask,
   saveTasks,
   setTaskMins,
+  updateTask,
   type Task,
   type TasksByWeek,
 } from './tasks'
@@ -86,6 +88,26 @@ export default function App() {
   const placements = useMemo(() => placementsOf(tasks), [tasks])
   const unplaced = useMemo(() => tasks.filter((t) => !t.slot), [tasks])
 
+  // Short-lived feedback: where a task landed, and which block should pulse so it's easy to find.
+  const [notice, setNotice] = useState<PlacedNotice | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  useExpiry(notice, () => setNotice(null), 7000)
+  useExpiry(highlightId, () => setHighlightId(null), 2600)
+  const said = (text: string, day: number | null) => setNotice({ text, day, key: Date.now() })
+  const whereText = (day: number, startMin: number) => `${DAY_FULL[day]} at ${hhmm(startMin)}`
+
+  function onAdd(day: number | null, title: string, mins: number) {
+    const next = autoPlace(addTask(tasks, { title, mins, day }), placeOpts())
+    const added = next[next.length - 1]
+    setTasksByWeek((all) => ({ ...all, [weekStart]: next }))
+    if (added.slot) {
+      setHighlightId(added.id)
+      said(`Placed on ${whereText(added.slot.day, added.slot.startMin)}.`, day)
+    } else {
+      said("Added, but there's no free gap for it this week.", day)
+    }
+  }
+
   // The last deletion, so it can be undone for a few seconds.
   const [undo, setUndo] = useState<{ task: Task; index: number; week: number } | null>(null)
   useExpiry(undo, () => setUndo(null), 9000)
@@ -115,6 +137,13 @@ export default function App() {
       return
     }
     editTasks((t) => moveTask(t, id, spot.day, spot.startMin, spot.overlap > 0))
+    setHighlightId(id)
+    said(
+      spot.overlap > 0
+        ? `Placed on ${whereText(spot.day, spot.startMin)}, overlapping for ${spot.overlap} min. Drag it to move it.`
+        : `Placed on ${whereText(spot.day, spot.startMin)}.`,
+      task.day,
+    )
   }
 
   async function handleFile(file: File | undefined) {
@@ -158,10 +187,9 @@ export default function App() {
           colors={groupColors}
           weekStart={weekStart}
           tasks={tasks}
-          onAdd={(day, title, mins) => {
-            const opts = placeOpts()
-            editTasks((t) => autoPlace(addTask(t, { title, mins, day }), opts))
-          }}
+          notice={notice}
+          onAdd={onAdd}
+          onEdit={(id, patch) => editTasks((t) => autoPlace(updateTask(t, id, patch), placeOpts()))}
           onRemove={onRemove}
           onPlaceAnyway={onPlaceAnyway}
           onSetMins={(id, mins) => {
@@ -193,6 +221,7 @@ export default function App() {
               canExport={placements.length > 0}
               onExport={() => setExportOpen(true)}
               onMoveTask={(id, day, startMin, forced) => editTasks((t) => moveTask(t, id, day, startMin, forced))}
+              highlightId={highlightId}
               canShuffle={tasks.length > 0}
               onShuffle={() => {
                 const opts = placeOpts()

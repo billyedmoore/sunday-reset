@@ -1,18 +1,24 @@
 import { useState, type FormEvent } from 'react'
+import { DAY_FULL, DAY_SHORT, MONTHS } from '../format'
 import { fromDayNum } from '../ical/dates'
-import type { Group } from '../settings'
+import { GROUP_LABEL, type Group } from '../settings'
 import { DEFAULT_MINS, DURATIONS, formatDuration, tasksFor, totalMins, type Task } from '../tasks'
-
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 interface Handlers {
   onAdd: (day: number | null, title: string, mins: number) => void
   onRemove: (id: string) => void
   onSetMins: (id: string, mins: number) => void
+  onEdit: (id: string, patch: { title?: string; day?: number | null }) => void
   /** Put a task that has no free gap on the calendar anyway, where it clashes least. */
   onPlaceAnyway: (id: string) => void
+}
+
+/** Where a task was just put, said out loud under the list it was added to. */
+export interface PlacedNotice {
+  text: string
+  /** The list it belongs to: a day index, or null for the weekly list. */
+  day: number | null
+  key: number
 }
 
 function DurationSelect({ value, onChange, label }: { value: number; onChange: (m: number) => void; label: string }) {
@@ -50,6 +56,89 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string, mins: 
   )
 }
 
+/** The task's name, edited in place: click (or Enter) to change it, Enter to save, Esc to cancel. */
+function EditableTitle({ title, onSave }: { title: string; onSave: (title: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(title)
+
+  if (!editing) {
+    return (
+      <button
+        className="title title-button"
+        onClick={() => {
+          setDraft(title)
+          setEditing(true)
+        }}
+        aria-label={`Rename task: ${title}`}
+        title="Click to rename"
+      >
+        {title}
+      </button>
+    )
+  }
+  const finish = (save: boolean) => {
+    setEditing(false)
+    if (save && draft.trim() && draft.trim() !== title) onSave(draft)
+  }
+  return (
+    <input
+      className="title title-input"
+      value={draft}
+      autoFocus
+      aria-label="Task name"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => finish(true)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') finish(true)
+        if (e.key === 'Escape') finish(false)
+      }}
+    />
+  )
+}
+
+interface RowProps {
+  task: Task
+  weekStart: number
+  onRemove: Handlers['onRemove']
+  onSetMins: Handlers['onSetMins']
+  onEdit: Handlers['onEdit']
+  onPlaceAnyway: Handlers['onPlaceAnyway']
+}
+
+function TaskRow({ task, weekStart, onRemove, onSetMins, onEdit, onPlaceAnyway }: RowProps) {
+  const unplaced = !task.slot
+  return (
+    <li className={unplaced ? 'unplaced' : ''}>
+      <EditableTitle title={task.title} onSave={(title) => onEdit(task.id, { title })} />
+      <select
+        className="dur"
+        value={task.day === null ? 'any' : String(task.day)}
+        aria-label={`Day for ${task.title}`}
+        onChange={(e) => onEdit(task.id, { day: e.target.value === 'any' ? null : Number(e.target.value) })}
+      >
+        <option value="any">Any</option>
+        {DAY_SHORT.map((name, i) => (
+          <option key={name} value={i}>
+            {name} {fromDayNum(weekStart + i).d}
+          </option>
+        ))}
+      </select>
+      <DurationSelect value={task.mins} onChange={(m) => onSetMins(task.id, m)} label={`Time for ${task.title}`} />
+      <button className="x" onClick={() => onRemove(task.id)} aria-label={`Delete ${task.title}`}>
+        ×
+      </button>
+      {unplaced && (
+        <div className="unplaced-note" role="status">
+          <span>No free {formatDuration(task.mins)} gap {task.day === null ? 'this week' : `on ${DAY_SHORT[task.day]}`}.</span>
+          <button className="btn small ghost" onClick={() => onPlaceAnyway(task.id)}>
+            Place anyway
+          </button>
+        </div>
+      )}
+    </li>
+  )
+}
+
 interface CardProps extends Handlers {
   variant: 'day' | 'general'
   color: string
@@ -57,42 +146,47 @@ interface CardProps extends Handlers {
   note: string
   day: number | null
   tasks: Task[]
+  weekStart: number
+  notice: PlacedNotice | null
+  /** True when the whole week has no tasks, so the empty list can say what to do. */
+  weekEmpty: boolean
 }
 
-function TaskCard({ variant, color, title, note, day, tasks, onAdd, onRemove, onSetMins, onPlaceAnyway }: CardProps) {
+function TaskCard({ variant, color, title, note, day, tasks, weekStart, notice, weekEmpty, ...handlers }: CardProps) {
   const mine = tasksFor(tasks, day)
   return (
     <section className={`task-card ${variant}`}>
       <header>
         <h2>
-          <i className="dot" style={{ ['--c' as string]: color }} />
+          <i className="dot" style={{ ['--c' as string]: color }} aria-hidden="true" />
           {title}
         </h2>
         <span className="note">{mine.length ? `${note} · ${formatDuration(totalMins(mine))}` : note}</span>
       </header>
       <ul>
-        {mine.length === 0 && <li className="empty">Nothing planned yet</li>}
-        {mine.map((t) => (
-          <li key={t.id} className={t.slot ? '' : 'unplaced'}>
-            <span className="title">{t.title}</span>
-            <DurationSelect value={t.mins} onChange={(m) => onSetMins(t.id, m)} label={`Time for ${t.title}`} />
-            <button className="x" onClick={() => onRemove(t.id)} aria-label={`Delete ${t.title}`}>
-              ×
-            </button>
-            {!t.slot && (
-              <div className="unplaced-note" role="status">
-                <span>
-                  No free {formatDuration(t.mins)} gap {t.day === null ? 'this week' : `on ${DAY_SHORT[t.day]}`}.
-                </span>
-                <button className="btn small ghost" onClick={() => onPlaceAnyway(t.id)}>
-                  Place anyway
-                </button>
-              </div>
-            )}
+        {mine.length === 0 && (
+          <li className="empty">
+            {weekEmpty ? 'Add what needs doing this week. Each task is placed in free time on the calendar for you.' : 'Nothing planned yet'}
           </li>
+        )}
+        {mine.map((t) => (
+          <TaskRow
+            key={t.id}
+            task={t}
+            weekStart={weekStart}
+            onRemove={handlers.onRemove}
+            onSetMins={handlers.onSetMins}
+            onEdit={handlers.onEdit}
+            onPlaceAnyway={handlers.onPlaceAnyway}
+          />
         ))}
       </ul>
-      <AddRow label={title} onAdd={(text, mins) => onAdd(day, text, mins)} />
+      <AddRow label={title} onAdd={(text, mins) => handlers.onAdd(day, text, mins)} />
+      {notice && notice.day === day && (
+        <p key={notice.key} className="placed-note" role="status">
+          {notice.text}
+        </p>
+      )}
     </section>
   )
 }
@@ -105,11 +199,13 @@ interface Props extends Handlers {
   tasks: Task[]
   /** Colour of each task group, shown as a dot so the lists match the calendar. */
   colors: Record<Group, string>
+  notice: PlacedNotice | null
 }
 
-export default function TaskList({ weekStart, today, tasks, colors, ...handlers }: Props) {
+export default function TaskList({ weekStart, today, tasks, colors, notice, ...handlers }: Props) {
   const [selected, setSelected] = useState(() => (today >= weekStart && today < weekStart + 7 ? today - weekStart : 0))
   const { d, m } = fromDayNum(weekStart + selected)
+  const weekEmpty = tasks.length === 0
 
   return (
     <div className="tasks" aria-label="Things to do this week">
@@ -133,8 +229,30 @@ export default function TaskList({ weekStart, today, tasks, colors, ...handlers 
         })}
       </div>
 
-      <TaskCard variant="day" color={colors.daily} title={DAY_FULL[selected]} note={`${d} ${MONTHS[m - 1]}`} day={selected} tasks={tasks} {...handlers} />
-      <TaskCard variant="general" color={colors.weekly} title="Any time this week" note="No set day" day={null} tasks={tasks} {...handlers} />
+      <TaskCard
+        variant="day"
+        color={colors.daily}
+        title={DAY_FULL[selected]}
+        note={`${d} ${MONTHS[m - 1]} · ${GROUP_LABEL.daily}`}
+        day={selected}
+        tasks={tasks}
+        weekStart={weekStart}
+        notice={notice}
+        weekEmpty={weekEmpty}
+        {...handlers}
+      />
+      <TaskCard
+        variant="general"
+        color={colors.weekly}
+        title={GROUP_LABEL.weekly}
+        note="Any time this week"
+        day={null}
+        tasks={tasks}
+        weekStart={weekStart}
+        notice={notice}
+        weekEmpty={false}
+        {...handlers}
+      />
     </div>
   )
 }

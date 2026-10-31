@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { downloadText } from '../download'
 import { buildIcs, exportableTasks, icsFilename } from '../exportIcs'
+import { DAY_SHORT, MONTHS, pad } from '../format'
 import { fromDayNum } from '../ical/dates'
 import { GROUP_LABEL, type Group, type Settings } from '../settings'
 import { formatDuration, totalMins, type Task } from '../tasks'
 
-const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const REMINDERS = [0, 5, 10, 15, 30, 60]
 
-const pad = (n: number) => String(n).padStart(2, '0')
 
 interface Props {
   open: boolean

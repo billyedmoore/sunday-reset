@@ -9,6 +9,13 @@ import { formatDuration, totalMins, type Task } from '../tasks'
 
 const REMINDERS = [0, 5, 10, 15, 30, 60]
 const ICS_TYPE = 'text/calendar'
+/**
+ * The type the file is downloaded as. Safari on iPad and iPhone doesn't save a download labelled
+ * text/calendar: it opens it in Apple Calendar and offers to add the events there, so the file never
+ * reaches Files to be imported into Google. A generic type is saved as it is, and the .ics name is
+ * all Google's import needs.
+ */
+const DOWNLOAD_TYPE = 'application/octet-stream'
 
 const GROUP_NOTE: Record<Group, string> = {
   daily: 'Tasks you gave a day',
@@ -52,11 +59,11 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
       reminderMins: settings.reminderMins,
       busy: settings.busy,
     })
-  const onDownload = () => downloadText(filename, ics(), `${ICS_TYPE};charset=utf-8`)
+  const onDownload = () => downloadText(filename, ics(), DOWNLOAD_TYPE)
 
   async function onShare() {
     const text = ics()
-    if (!(await shareText(filename, text, ICS_TYPE))) downloadText(filename, text, `${ICS_TYPE};charset=utf-8`)
+    if (!(await shareText(filename, text, ICS_TYPE))) downloadText(filename, text, DOWNLOAD_TYPE)
   }
 
   return (

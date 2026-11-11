@@ -21,10 +21,18 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Safari on iPad otherwise enlarges text in some orientations. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   background: var(--page);
+  /* The app fills the screen, so there is nothing to rubber-band or pull to refresh. */
+  overscroll-behavior: none;
 }
 
 button {
@@ -47,6 +55,8 @@ h1 {
   padding: 16px 16px 20px;
   display: flex;
   flex-direction: column;
+  /* No double-tap zoom, so taps on buttons and blocks respond at once. Pinch zoom still works. */
+  touch-action: manipulation;
 }
 
 .layout {
@@ -207,8 +217,10 @@ h1 {
   padding: 0 4px;
 }
 
-.x:hover {
-  color: var(--accent);
+@media (hover: hover) {
+  .x:hover {
+    color: var(--accent);
+  }
 }
 
 /* Right: calendar panel */
@@ -236,8 +248,11 @@ h1 {
   font-weight: 600;
 }
 
-.btn:hover {
-  filter: brightness(1.06);
+/* Hover styles are for a mouse only: on a touch screen they stick after a tap. */
+@media (hover: hover) {
+  .btn:hover {
+    filter: brightness(1.06);
+  }
 }
 
 .btn.small {
@@ -477,6 +492,10 @@ h1 {
   cursor: grab;
   touch-action: none;
   user-select: none;
+  /* Holding a finger on a block starts a drag, not a text selection or the iOS link menu. */
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chip.task-chip.dragging {
@@ -858,8 +877,10 @@ h1 {
   overflow-wrap: anywhere;
 }
 
-.title-button:hover {
-  border-color: var(--line);
+@media (hover: hover) {
+  .title-button:hover {
+    border-color: var(--line);
+  }
 }
 
 .title-input {
@@ -1033,5 +1054,57 @@ h1 {
 
   .cal-head {
     margin-bottom: 8px;
+  }
+}
+
+/* ---- Touch screens ---- */
+/* Fingers need bigger targets than a mouse pointer: about 44px, the size Apple recommends. Text fields
+   are 16px so Safari doesn't zoom the page in when one is tapped. */
+@media (pointer: coarse) {
+  .btn.small,
+  .btn.dice {
+    min-height: 40px;
+    padding: 8px 16px;
+  }
+
+  .x {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.5rem;
+  }
+
+  .task-card input,
+  .field input:not([type='checkbox']),
+  .dur {
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  .title-button {
+    min-height: 40px;
+  }
+
+  .task-card li {
+    padding: 4px 0;
+  }
+
+  .field input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+  }
+
+  .eg-head input[type='color'] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .export-help summary {
+    padding: 8px 0;
+  }
+
+  /* The close buttons in the corners of the floating boxes keep their place as they grow. */
+  .import-intro .x {
+    top: 0;
+    right: 2px;
   }
 }

@@ -985,3 +985,53 @@ h1 {
   outline: 3px solid var(--ink);
   outline-offset: 1px;
 }
+
+/* ---- A tablet held upright, or a thin window ---- */
+/* There isn't room for the lists beside a readable week, so they go above it: the day tabs across the
+   top, the two lists side by side, then the calendar. The lists are on top so the on-screen keyboard,
+   which covers the bottom of the screen, doesn't hide what is being typed. */
+@media (max-width: 999px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1.8fr);
+    gap: 14px;
+  }
+
+  .tasks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .day-tabs {
+    grid-column: 1 / -1;
+  }
+
+  /* One line instead of three, to leave the height for the lists. */
+  .day-tab {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 5px;
+    padding: 8px 0;
+  }
+
+  .day-tab b,
+  .day-tab .count {
+    display: inline;
+    min-height: 0;
+  }
+
+  .task-card {
+    padding: 10px 12px;
+  }
+
+  .panel {
+    padding: 10px;
+  }
+
+  .cal-head {
+    margin-bottom: 8px;
+  }
+}

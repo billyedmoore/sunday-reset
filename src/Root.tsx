@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
 import App from './App'
 import UnsupportedScreen from './components/UnsupportedScreen'
-import { isUnsupportedScreen } from './screen'
+import { screenProblem } from './screen'
 
-const touch = () => window.matchMedia('(pointer: coarse)')
+/** The window's width and the device screen's short side. Neither changes when a keyboard slides up. */
+const measure = () => screenProblem({ width: window.innerWidth, shortSide: Math.min(window.screen.width, window.screen.height) })
 
-/** Shows the app, or an explanation on screens that are too small for it; follows window resizes. */
+/** Shows the app, or an explanation where it can't fit; follows window resizes and rotation. */
 export default function Root() {
-  const [unsupported, setUnsupported] = useState(() => isUnsupportedScreen(window.innerWidth, touch().matches))
+  const [problem, setProblem] = useState(measure)
   useEffect(() => {
-    const update = () => setUnsupported(isUnsupportedScreen(window.innerWidth, touch().matches))
+    const update = () => setProblem(measure())
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [])
-  return unsupported ? <UnsupportedScreen /> : <App />
+  return problem ? <UnsupportedScreen problem={problem} /> : <App />
 }

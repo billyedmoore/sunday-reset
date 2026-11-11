@@ -986,6 +986,16 @@ h1 {
   color: var(--muted);
 }
 
+.eg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.eg-actions .btn:first-child {
+  flex: 1;
+}
+
 /* ---- Screens too small for the planner ---- */
 .unsupported {
   min-height: 100dvh;

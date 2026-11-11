@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { downloadText } from '../download'
+import { canShareFile, downloadText, shareText } from '../download'
 import { buildIcs, exportableTasks, icsFilename } from '../exportIcs'
 import { DAY_SHORT, MONTHS, hhmm } from '../format'
 import { fromDayNum } from '../ical/dates'
@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, GROUPS, GROUP_LABEL, type Group, type Settings } from
 import { formatDuration, totalMins, type Task } from '../tasks'
 
 const REMINDERS = [0, 5, 10, 15, 30, 60]
+const ICS_TYPE = 'text/calendar'
 
 const GROUP_NOTE: Record<Group, string> = {
   daily: 'Tasks you gave a day',
@@ -39,15 +40,22 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
   const g = settings[group]
   const setGroup = (patch: Partial<typeof g>) => onSettings({ ...settings, [group]: { ...g, ...patch } })
 
-  function onDownload() {
-    const ics = buildIcs(list, {
+  // The share sheet is offered where it takes calendar files (iPad): it can save to Files or send on.
+  const [canShare] = useState(() => canShareFile(ICS_TYPE))
+  const filename = icsFilename(group, weekStart)
+  const ics = () =>
+    buildIcs(list, {
       calendarName: g.name,
       color: g.color,
       weekStart,
       reminderMins: settings.reminderMins,
       busy: settings.busy,
     })
-    downloadText(icsFilename(group, weekStart), ics, 'text/calendar;charset=utf-8')
+  const onDownload = () => downloadText(filename, ics(), `${ICS_TYPE};charset=utf-8`)
+
+  async function onShare() {
+    const text = ics()
+    if (!(await shareText(filename, text, ICS_TYPE))) downloadText(filename, text, `${ICS_TYPE};charset=utf-8`)
   }
 
   return (
@@ -100,9 +108,16 @@ function GroupCard({ group, tasks, weekStart, settings, onSettings }: CardProps)
         {list.length} task{list.length === 1 ? '' : 's'}
         {list.length ? ` · ${formatDuration(totalMins(list))}` : ''}
       </p>
-      <button className="btn" onClick={onDownload} disabled={list.length === 0}>
-        Download .ics
-      </button>
+      <div className="eg-actions">
+        <button className="btn" onClick={onDownload} disabled={list.length === 0}>
+          Download .ics
+        </button>
+        {canShare && (
+          <button className="btn ghost" onClick={onShare} disabled={list.length === 0}>
+            Share…
+          </button>
+        )}
+      </div>
     </section>
   )
 }

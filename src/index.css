@@ -1118,3 +1118,16 @@ h1 {
     right: 2px;
   }
 }
+
+/* Wording that only makes sense with a mouse, such as dropping a file onto the page. */
+@media (hover: none) {
+  .mouse-only {
+    display: none;
+  }
+}
+
+.export-help a,
+.import-help a {
+  color: var(--accent);
+  font-weight: 600;
+}

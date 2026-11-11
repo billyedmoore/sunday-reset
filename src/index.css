@@ -185,6 +185,10 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.task-card li .x {
+  margin-left: auto;
+}
+
 .add-row {
   display: flex;
   gap: 8px;
@@ -1047,7 +1051,7 @@ h1 {
     justify-content: center;
     align-items: baseline;
     gap: 5px;
-    padding: 8px 0;
+    padding: 11px 0;
   }
 
   .day-tab b,
@@ -1098,6 +1102,18 @@ h1 {
 
   .task-card li {
     padding: 4px 0;
+  }
+
+  /* The bigger controls leave little room for the name in a thin list, so there it gets a line of its
+     own with the day, length and delete button underneath. */
+  .task-card ul {
+    container: tasklist / inline-size;
+  }
+
+  @container tasklist (max-width: 339px) {
+    .task-card li .title {
+      flex-basis: 100%;
+    }
   }
 
   .field input[type='checkbox'] {

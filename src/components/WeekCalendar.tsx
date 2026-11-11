@@ -5,6 +5,7 @@ import { fromDayNum, midnightOf } from '../ical/dates'
 import { eventsBetween, splitByDay, type Segment } from '../ical/expand'
 import type { StoredEvent } from '../ical/parse'
 import { layoutLanes } from '../lanes'
+import { GOOGLE_IMPORT_URL } from '../links'
 import { DAY_END, DAY_START, STEP_MIN, slotFree, type Busy, type Placement } from '../schedule'
 import { GROUPS, GROUP_LABEL, groupOf, type Group } from '../settings'
 import { formatDuration, type Task } from '../tasks'
@@ -274,16 +275,22 @@ function ImportIntro({ importing, onImport, onClose }: { importing: boolean; onI
           Not now
         </button>
       </div>
-      <p className="hint">Choose a Google Calendar .zip or an .ics file, or drop it anywhere.</p>
+      <p className="hint">
+        Choose a Google Calendar .zip or an .ics file<span className="mouse-only">, or drop it anywhere</span>.
+      </p>
       {help && (
         <div className="import-help" id="import-help">
           <h4>From Google Calendar</h4>
           <ol>
             <li>
-              In Google Calendar on a computer, open <b>Settings (gear) → Import &amp; export → Export</b>.
+              Open{' '}
+              <a href={GOOGLE_IMPORT_URL} target="_blank" rel="noreferrer">
+                Import &amp; export
+              </a>{' '}
+              on the Google Calendar website (not the app) and press <b>Export</b>.
             </li>
             <li>
-              Choose the downloaded <b>.zip</b> here, still zipped.
+              Choose the downloaded <b>.zip</b> here, still zipped. On an iPad it is in <b>Files → Downloads</b>.
             </li>
           </ol>
           <p className="hint">

@@ -3,6 +3,7 @@ import { canShareFile, downloadText, shareText } from '../download'
 import { buildIcs, exportableTasks, icsFilename } from '../exportIcs'
 import { DAY_SHORT, MONTHS, hhmm } from '../format'
 import { fromDayNum } from '../ical/dates'
+import { GOOGLE_IMPORT_URL } from '../links'
 import { DEFAULT_SETTINGS, GROUPS, GROUP_LABEL, type Group, type Settings } from '../settings'
 import { formatDuration, totalMins, type Task } from '../tasks'
 
@@ -218,7 +219,7 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
           <h4>Set up once</h4>
           <ol>
             <li>
-              Next to <b>Other calendars</b> choose <b>+ → Create new calendar</b>. Make two, named <b>{settings.daily.name}</b> and <b>{settings.weekly.name}</b>.
+              On the Google Calendar website, next to <b>Other calendars</b> choose <b>+ → Create new calendar</b>. Make two, named <b>{settings.daily.name}</b> and <b>{settings.weekly.name}</b>.
             </li>
             <li>
               Set each calendar's colour in its settings (<b>+</b> under the palette picks any colour):
@@ -237,10 +238,16 @@ export default function ExportDialog({ open, onClose, tasks, weekStart, settings
           </ol>
           <h4>Each week</h4>
           <ol start={3}>
-            <li>Download both files above.</li>
             <li>
-              In Google Calendar open <b>Settings (gear) → Import &amp; export → Import</b>. Choose the Day to day
-              file and set <b>Add to calendar</b> to <b>{settings.daily.name}</b>.
+              Download both files above. On an iPad they go to <b>Files → Downloads</b>.
+            </li>
+            <li>
+              Open{' '}
+              <a href={GOOGLE_IMPORT_URL} target="_blank" rel="noreferrer">
+                Import &amp; export
+              </a>{' '}
+              on the Google Calendar website (the app can't import files). Choose the Day to day file and set{' '}
+              <b>Add to calendar</b> to <b>{settings.daily.name}</b>.
             </li>
             <li>
               Repeat for the Weekly file, adding it to <b>{settings.weekly.name}</b>.

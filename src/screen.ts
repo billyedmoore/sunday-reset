@@ -1,12 +1,27 @@
-/** Below this width the layout can't hold the task list beside a week of events. */
-export const MIN_WIDTH = 760
-/** A touch screen narrower than this is treated as a phone or small tablet, whatever its pixel width says. */
-export const MIN_TOUCH_WIDTH = 900
+/** A device whose screen is shorter than this on its short side is a phone; tablets start at about 600. */
+export const PHONE_SHORT_SIDE = 600
+/** Below this window width a week of seven day columns is too cramped to read or drag in. */
+export const MIN_WIDTH = 700
+
+export interface Screen {
+  /** Width of the browser window in CSS pixels. */
+  width: number
+  /** The shorter side of the whole device screen in CSS pixels, whichever way up it is held. */
+  shortSide: number
+}
 
 /**
- * Sunday Reset is built for a laptop or desktop screen. This decides when to show a short explanation
- * instead of a layout that can't work: a narrow window, or a small touch screen.
+ * Sunday Reset needs room for a week of events, so it runs on tablets, laptops and desktops.
+ *
+ * A phone is recognised by the size of its screen, not by touch: tablets and many laptops are touch
+ * screens too, and a big phone turned sideways is as wide as a small tablet. The screen's short side
+ * doesn't change with rotation, so a phone stays a phone and an iPad stays an iPad either way up.
+ *
+ * Returns 'phone' for a phone, 'narrow' for a big screen whose window is too thin (a small desktop
+ * window, or an iPad sharing the screen with another app), or null when the planner fits.
  */
-export function isUnsupportedScreen(width: number, coarsePointer: boolean): boolean {
-  return width < MIN_WIDTH || (coarsePointer && width < MIN_TOUCH_WIDTH)
+export function screenProblem({ width, shortSide }: Screen): 'phone' | 'narrow' | null {
+  if (shortSide < PHONE_SHORT_SIDE) return 'phone'
+  if (width < MIN_WIDTH) return 'narrow'
+  return null
 }
